@@ -1,11 +1,12 @@
 'use strict';
 const fs=require('node:fs/promises'),path=require('node:path');
 const {attachGame}=require('./inspect-game.cjs');
-const {SD_PATH}=require('./sd-payload.cjs');
+// The MKWorld loader supplies the source path explicitly for each mod pack.
 const {Bridge}=require('./native-bridge.cjs');
 const check=(x,s)=>{if(!x)throw Error(s);};
 async function openSource(run,bridge,options={}) {
- const sourcePath=options.path??SD_PATH,sourceSize=BigInt(options.size??25111566);
+ const sourcePath=options.path,sourceSize=BigInt(options.size);
+ check(typeof sourcePath==='string'&&sourcePath.startsWith('/roms/')&&Number.isSafeInteger(options.size)&&options.size>0,'A verified MKWorld SD source path and size are required');
  const a=await attachGame(run),{s,domain,filesystem}=a;
  let sd,file;
  try {

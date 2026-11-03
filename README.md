@@ -31,15 +31,12 @@ You can also use the standard Atmosphère folder layout inside each mod: `atmosp
 
 You need your own Mario Kart World game/update on Switch 2, a microSD card, and a supported **SmileBASIC + ns2jb** setup (tested on firmware 23.0.1).
 
-Install **Node.js, Python 3 and Zig**, and download:
-- [Kurumuz's ns2jb](https://gitlab.com/kurumuz/ns2jb)
-- [IZ2S-Platform / OunceCake](https://github.com/byizmysh/IZ2S-Platform)
+Install **Node.js, Python 3 and Zig**, and download [ns2jb](https://gitlab.com/kurumuz/ns2jb).
 
 In a terminal (Linux/WSL) opened in `ns2jb-modloader/`, set their locations:
 
 ```sh
 export NS2_UPSTREAM="/path/to/ns2jb"
-export OUNCECAKE_ENGINE="/path/to/IZ2S-Platform/modules/iz-exchange/server/ouncecake/engine"
 export ZIG="$(command -v zig)"
 python3 -m venv research/superstars-mod/.venv
 research/superstars-mod/.venv/bin/pip install -r requirements-test.txt
@@ -80,4 +77,4 @@ A fresh, verified ns2jb session is required for each install. Don't install twic
 
 The loader is a source-based beta, not a one-click app. It does not include game assets, firmware, keys or mods from other authors.
 
-**Credits:** [pepsipu](https://gitlab.com/pepsipu/ns2jb), [Kurumuz](https://gitlab.com/kurumuz/ns2jb), [IZ2S / OunceCake](https://github.com/byizmysh/IZ2S-Platform).
+**Credits:** [pepsipu](https://gitlab.com/pepsipu/ns2jb), [Kurumuz](https://gitlab.com/kurumuz/ns2jb). Bundled game-mount helpers adapted from [IZ2S / OunceCake](https://github.com/byizmysh/IZ2S-Platform) (GPL-2.0; see `lib/game-files/COPYING`). No separate OunceCake download is required.

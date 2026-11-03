@@ -118,8 +118,6 @@ async function main(){
  console.log('Total: '+resources.length+' RomFS replacement(s).');
  if(process.argv[2]==='--check'){console.log('Mod folders checked. No changes were made.');return}
  process.env.NS2_WORKSPACE=root;
- check(process.env.OUNCECAKE_ENGINE&&fs.existsSync(path.join(process.env.OUNCECAKE_ENGINE,'mounts.cjs')),
-  'Set OUNCECAKE_ENGINE to OunceCake/modules/iz-exchange/server/ouncecake/engine');
  check(process.env.ZIG,'Set ZIG to the Zig compiler path.');
  check(fs.existsSync(path.join(root,'research/superstars-mod/.venv/bin/python')),
   'Set up Python dependencies as shown in README.');
