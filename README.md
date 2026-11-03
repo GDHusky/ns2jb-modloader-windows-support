@@ -12,16 +12,20 @@ Load **RomFS and ExeFS mods by Title ID** on Switch 2, directly from microSD.
 
 ## 1. Add your mods
 
-Put each mod's `romfs/` and `exefs/` folders under **`ns2jb-modloader/contents/<TITLE_ID>/`**, using each game's 16-digit Title ID. If included, copy `exefs_patches/` beside `contents/`. You can have mods for several games together:
+*You can drag and drop your Atmosphère `contents` folder into `ns2jb-modloader/` (as long as your mods are compatible).*
+
+To add a mod manually, put its `romfs/` and `exefs/` folders under **`ns2jb-modloader/contents/<TITLE_ID>/`**, using the game's 16-digit Title ID. If included, copy `exefs_patches/` beside `contents/`. You can have mods for several games together:
 
 ```text
 ns2jb-modloader/
 ├── contents/
 │   ├── 0400c3f00006e000/              # Mario Kart World
 │   │   └── romfs/
-│   │       └── System/
-│   │           └── GymlArchive/
-│   │               └── ...200cc files...
+│   │       ├── System/
+│   │       │   └── GymlArchive/
+│   │       │       └── ...200cc files...
+│   │       ├── Model/               # Character model mod
+│   │       └── Tex/                 # Character textures
 │   └── ...other game's Title ID.../
 │       ├── romfs/
 │       └── exefs/
@@ -30,11 +34,9 @@ ns2jb-modloader/
         └── <BUILD_ID>.ips
 ```
 
-Merge `contents/` folders when adding several mods. One installation handles all included games.
+Combine each game's mods in the same `romfs/` or `exefs/` folder. One installation handles all included games.
 
 For example, if you want to install the 200cc mod for Mario Kart World and the download contains `200cc/romfs/System/GymlArchive/`, copy its `romfs/` folder into `ns2jb-modloader/contents/0400c3f00006e000/`. Keep the paths inside `romfs/` unchanged.
-
-*You can also drag and drop your Atmosphère `contents` folder into `ns2jb-modloader/` (as long as your mods are compatible).*
 
 `exefs/` contains complete files such as `main` or `subsdk0`. IPS/IPS32 patches go in `exefs_patches/<PATCH_NAME>/<BUILD_ID>.ips`; keep their filenames unchanged.
 
