@@ -50,6 +50,14 @@ The virtual environment may have **any name and location**; `.venv` above is jus
 
 This setup is done once. Use the same environment variables and activated Python environment in both terminals.
 
+**If you already have FS 4/4 verified and RPC running with ns2jb**, keep that host running. After setting up the PC dependencies above, skip `node start.cjs` and install from a second terminal using your existing run directory:
+
+```sh
+node install.cjs --run-dir "/path/to/ns2jb/runs/switch2-SESSION"
+```
+
+The installer checks that run's verified FS 4/4 proof and listening RPC state. Use a session where no modloader has been installed yet. Then follow the **READY** instructions below.
+
 ## 3. Install all mods
 
 **First terminal:**
@@ -66,7 +74,7 @@ Follow the instructions shown by ns2jb in SmileBASIC. Wait until it says **FS 4/
 node install.cjs
 ```
 
-That's it — **no mod names or RPC session paths to type**. The installer detects the active session, combines the mods and verifies the installation.
+When using `node start.cjs`, **no mod names or RPC session paths need to be typed**. The installer detects the active session, combines the mods and verifies the installation.
 
 When it says **READY**:
 1. Stop the first terminal with **Ctrl+C** and let ns2jb finish cleanup.
@@ -77,7 +85,7 @@ The PC can be disconnected after installation: FS serves the mod files directly 
 
 ## Notes
 
-A fresh, verified ns2jb session is required for each install. Don't install twice in the same boot. If an unexpected native operation fails, stop and reboot rather than retrying a partially applied hook.
+A verified ns2jb FS 4/4 session with RPC running is required for installation. Don't install twice in the same boot. If an unexpected native operation fails, stop and reboot rather than retrying a partially applied hook.
 
 The loader is a source-based beta, not a one-click app. It does not include game assets, firmware, keys or mods from other authors.
 

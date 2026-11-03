@@ -75,7 +75,17 @@ function collectMods(){
  }
  return {modFolders,resources};
 }
-function currentSession(){
+function verifiedRun(run){
+ const result=json(path.join(run,'result.json'));
+ check(result.verified&&result.rpc?.state==='listening','Selected run is not a verified listening RPC session.');
+ const current=json(path.join(run,'switch2','fs-execution-current.json'));
+ const proof=json(path.isAbsolute(current.file)?current.file:path.resolve(run,current.file));
+ check(current.verified&&proof.verified&&proof.session===path.basename(run),
+  'Selected run has no matching verified FS 4/4 execution proof.');
+ return run;
+}
+function currentSession(runDirectory){
+ if(runDirectory)return verifiedRun(path.resolve(runDirectory));
  const configFile=path.join(root,'.ns2jb-start.json');
  check(fs.existsSync(configFile),'Run node start.cjs first, then wait for FS 4/4.');
  const config=json(configFile);
@@ -111,8 +121,10 @@ function currentSession(){
  return found[0];
 }
 async function main(){
- check(process.argv.length===2||process.argv.length===3&&process.argv[2]==='--check',
-  'Usage: node install.cjs');
+ const args=process.argv.slice(2);
+ check(args.length===0||args.length===1&&args[0]==='--check'||
+  args.length===2&&args[0]==='--run-dir'&&args[1]&&!args[1].startsWith('--'),
+  'Usage: node install.cjs [--check | --run-dir PATH]');
  const {modFolders,resources}=collectMods();
  console.log('\nMario Kart World mods:');
  for(const mod of modFolders)console.log('  '+mod.name+' ('+mod.files+' file(s))');
@@ -121,7 +133,7 @@ async function main(){
  process.env.NS2_WORKSPACE=root;
  checkPythonDependencies();
  checkNativeTools();
- const run=currentSession(),session=path.basename(run);
+ const run=currentSession(args[0]==='--run-dir'?args[1]:undefined),session=path.basename(run);
  const capture=path.join(mkw,'captures',session);
  check(!fs.existsSync(path.join(capture,'resident-install.json')),
   'This session already has a resident installation. Do not install twice; reboot before trying again.');
