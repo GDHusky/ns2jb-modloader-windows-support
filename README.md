@@ -49,11 +49,7 @@ python3 -m pip install -r requirements.txt
 
 The environment may have **any name and location**; `.venv` is the example used below. If you use another location, replace `.venv/bin/activate` with your environment's `bin/activate` path. Python and Zig are found on PATH. You can also set `PYTHON="/path/to/python"` or `ZIG="/path/to/zig"` to select an executable explicitly. Keep `node` and `readelf` on PATH.
 
-**Choose 2.a if your session is ready, or 2.b if you still need to establish it.**
-
-### 2.a. You already have FS 4/4 verified and RPC running
-
-Keep your existing ns2jb host running. Open a **second terminal in `ns2jb-modloader/`** and run:
+With **FS 4/4 verified and RPC running**, keep your ns2jb host open. In a **second terminal in `ns2jb-modloader/`**, run:
 
 ```sh
 source .venv/bin/activate
@@ -69,10 +65,6 @@ You can check the mod folder layout without contacting the console:
 ```sh
 node install.cjs --check
 ```
-
-### 2.b. You need to start ns2jb first
-
-Follow the setup and launch instructions in your [ns2jb checkout](https://gitlab.com/kurumuz/ns2jb). Wait for **FS 4/4 verified**, with RPC kept running, and leave that host terminal open. Then return to **2.a** to install the mods.
 
 ## 3. Open Mario Kart World
 
