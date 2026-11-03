@@ -6,6 +6,7 @@ const fs=require('node:fs/promises');
 const path=require('node:path');
 const crypto=require('node:crypto');
 const cp=require('node:child_process');
+const {zigCommand}=require('../../lib/toolchain.cjs');
 const root=path.resolve(process.env.NS2_WORKSPACE || path.join(__dirname,'../..'));
 const check=(ok,why)=>{if(!ok)throw Error(why);};
 const hash=b=>crypto.createHash('sha256').update(b).digest('hex');
@@ -74,7 +75,7 @@ allocation: .xword ${address}
 `;
  const stem=path.join(directory,mode),src=stem+'.S',elf=stem+'.elf';
  await fs.writeFile(src,assembly,{mode:0o600});
- const zig=(process.env.ZIG || path.join(root,'work/dolphin-port/zig/zig'));
+ const zig=zigCommand();
  cp.execFileSync(zig,['cc','-target','aarch64-freestanding-none','-mcpu=cortex_a78c',
   '-c',src,'-o',elf],{stdio:'pipe'});
  const binary=textSection(await fs.readFile(elf),base+BigInt(OFF.cave),{

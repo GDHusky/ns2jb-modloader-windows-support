@@ -3,12 +3,13 @@
 // and the original SmileBASIC controller are alive. Never the resident reader.
 const fs=require('node:fs/promises'),path=require('node:path'),cp=require('node:child_process');
 const {textSection}=require('./fs-allocator.cjs');
+const {zigCommand}=require('../../lib/toolchain.cjs');
 const root=path.resolve(process.env.NS2_WORKSPACE || path.join(__dirname,'../..')),check=(x,s)=>{if(!x)throw Error(s);};
 const CAVE=0x24d100,NOTIFIER=0x1201b0,WIDTH=256;
 async function assemble(dir,source,base,externals={}) {
  await fs.mkdir(dir,{recursive:true});const file=path.join(dir,'native.S'),elf=path.join(dir,'native.o');
  await fs.writeFile(file,source,{mode:0o600});
- cp.execFileSync((process.env.ZIG || path.join(root,'work/dolphin-port/zig/zig')),['cc','-target','aarch64-freestanding-none','-mcpu=cortex_a78c','-c',file,'-o',elf]);
+ cp.execFileSync(zigCommand(),['cc','-target','aarch64-freestanding-none','-mcpu=cortex_a78c','-c',file,'-o',elf]);
  return textSection(await fs.readFile(elf),base,externals);
 }
 class Bridge {

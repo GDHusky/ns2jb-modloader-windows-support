@@ -2,6 +2,8 @@ research/**/captures/
 research/**/prepared/
 research/**/build/
 research/**/.venv/
+.venv/
+venv/
 research/**/__pycache__/
 MarioKartWorld/mods/*
 !MarioKartWorld/mods/.gitkeep

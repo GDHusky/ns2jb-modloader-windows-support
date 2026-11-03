@@ -3,6 +3,7 @@
 // Mario Kart World RomFS beta: install ALL mod folders in one qualified FS
 // session. A shared RomFS path is a hard conflict, not a silent override.
 const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
+const {pythonCommand,checkPythonDependencies,checkNativeTools}=require('./lib/toolchain.cjs');
 const root=__dirname,mkw=path.join(root,'research/mkw-knockout-research');
 const modsRoot=path.join(root,'MarioKartWorld','mods');
 const planDir=path.join(mkw,'prepared','probe-pack'),planFile=path.join(planDir,'overlay.json');
@@ -118,16 +119,15 @@ async function main(){
  console.log('Total: '+resources.length+' RomFS replacement(s).');
  if(process.argv[2]==='--check'){console.log('Mod folders checked. No changes were made.');return}
  process.env.NS2_WORKSPACE=root;
- check(process.env.ZIG,'Set ZIG to the Zig compiler path.');
- check(fs.existsSync(path.join(root,'research/superstars-mod/.venv/bin/python')),
-  'Set up Python dependencies as shown in README.');
+ checkPythonDependencies();
+ checkNativeTools();
  const run=currentSession(),session=path.basename(run);
  const capture=path.join(mkw,'captures',session);
  check(!fs.existsSync(path.join(capture,'resident-install.json')),
   'This session already has a resident installation. Do not install twice; reboot before trying again.');
  console.log('\nUsing current ns2jb FS session automatically: '+session);
- cmd('node',['research/superstars-mod/capture-fs.cjs',run]);
- cmd('node',['research/mkw-knockout-research/read-content.cjs',run,'--metadata-only']);
+ cmd(process.execPath,['research/superstars-mod/capture-fs.cjs',run]);
+ cmd(process.execPath,['research/mkw-knockout-research/read-content.cjs',run,'--metadata-only']);
  const inv=json(path.join(capture,'mkw-inventory.json'));
  check(inv.complete&&inv.temporarySessionClosed&&!(inv.cleanupErrors||[]).length&&inv.title==='0400c3f00006e000',
   'Mario Kart World metadata capture did not qualify.');
@@ -141,20 +141,20 @@ async function main(){
  });
  let batch=[],size=0;
  function flush(){
-  if(batch.length){cmd('node',['research/mkw-knockout-research/read-more.cjs',run,...batch]);batch=[];size=0;}
+  if(batch.length){cmd(process.execPath,['research/mkw-knockout-research/read-more.cjs',run,...batch]);batch=[];size=0;}
  }
  for(const item of originals){
   if(batch.length&&size+item.size>32*1024*1024)flush();
   batch.push(item.file);size+=item.size;
  }
  flush();
- cmd('python3',['research/mkw-knockout-research/prepare-probe.py',capture,
+ cmd(pythonCommand(),['research/mkw-knockout-research/prepare-probe.py',capture,
   '--resources',...modFolders.map(x=>path.dirname(x.romfs)),'--out',planDir]);
  const plan=json(planFile);
  check(plan.session===session&&plan.titleId==='0400c3f00006e000'&&plan.resources?.length===resources.length,
   'Prepared mod pack does not match this console session.');
- cmd('node',['research/mkw-knockout-research/upload-pack.cjs',run,planFile]);
- cmd('node',['research/mkw-knockout-research/install-resident.cjs',run,planFile]);
+ cmd(process.execPath,['research/mkw-knockout-research/upload-pack.cjs',run,planFile]);
+ cmd(process.execPath,['research/mkw-knockout-research/install-resident.cjs',run,planFile]);
  const journal=json(path.join(capture,'resident-install.json'));
  check(journal.verified&&journal.active&&journal.hookAttached,
   'Native loader did not qualify. Do not continue.');

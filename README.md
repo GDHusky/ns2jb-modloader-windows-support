@@ -35,18 +35,20 @@ You can also use the standard Atmosphère folder layout inside each mod: `atmosp
 
 You need your own Mario Kart World game/update on Switch 2, a microSD card, and a supported **SmileBASIC + ns2jb** setup (tested on firmware 23.0.1).
 
-Install **Node.js, Python 3 and Zig**, and download [ns2jb](https://gitlab.com/kurumuz/ns2jb).
+Install **Node.js, Python 3, Zig and GNU binutils** (`readelf`), and download [ns2jb](https://gitlab.com/kurumuz/ns2jb).
 
 In a terminal (Linux/WSL) opened in `ns2jb-modloader/`, set their locations:
 
 ```sh
 export NS2_UPSTREAM="/path/to/ns2jb"
-export ZIG="$(command -v zig)"
-python3 -m venv research/superstars-mod/.venv
-research/superstars-mod/.venv/bin/pip install -r requirements-test.txt
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements-test.txt
 ```
 
-This setup is done once. Use the same environment variables in both terminals.
+The virtual environment may have **any name and location**; `.venv` above is just an example. Python and Zig are found on PATH, so activating your own environment works. You can also set `PYTHON="/path/to/python"` or `ZIG="/path/to/zig"` to select an executable explicitly. No paths from the author's PC are required. Keep `node` and `readelf` on PATH.
+
+This setup is done once. Use the same environment variables and activated Python environment in both terminals.
 
 ## 3. Install all mods
 

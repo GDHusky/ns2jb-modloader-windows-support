@@ -5,6 +5,7 @@ const {Bridge,CAVE}=require('../superstars-mod/native-bridge.cjs');
 const {openSource,pin,unpin}=require('../superstars-mod/source-file.cjs');
 const {attachGame,createGameFiles,discoverUpdates,readRomfs}=require('../superstars-mod/inspect-game.cjs');
 const {buildContext,loadPlan}=require('./resident-context.cjs'),{build}=require('./build-reader.cjs');
+const {pythonCommand}=require('../../lib/toolchain.cjs');
 const check=(x,s)=>{if(!x)throw Error(s);};
 async function main(run,planFile=path.join(__dirname,'prepared/probe-pack/overlay.json')){
  run=path.resolve(run);const session=path.basename(run),out=path.join(__dirname,'captures',session),journal=path.join(out,'resident-install.json');
@@ -41,7 +42,7 @@ async function main(run,planFile=path.join(__dirname,'prepared/probe-pack/overla
   check(await b.m.u32(source.fileObject.object+0x20)===1,'Source file did not survive client cleanup');
   const context=buildContext(plan,source,b.base,allocation,0),at=Number(allocation);await b.m.write(at,await b.m.read(at,4096),context);
   const {code,layout}=await build(b.base,allocation);r.code=layout;
-  r.localTests=cp.execFileSync(path.resolve(__dirname,'../superstars-mod/.venv/bin/python'),[path.join(__dirname,'test-reader.py'),'--plan',planFile],{encoding:'utf8'}).trim();await save();
+  r.localTests=cp.execFileSync(pythonCommand(),[path.join(__dirname,'test-reader.py'),'--plan',planFile],{encoding:'utf8'}).trim();await save();
   await b.stage(Buffer.alloc(0));const width=(code.length+15)&~15;
   if(width>b.previous.length){const tail=await b.read(b.cave+BigInt(b.previous.length),width-b.previous.length);check(tail.every(v=>v===0),'Native text padding is occupied');b.previous=Buffer.concat([b.previous,tail]);}
   await b.stage(code);
