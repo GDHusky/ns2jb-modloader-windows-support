@@ -78,6 +78,8 @@ The PC can be disconnected after installation: FS serves the mod files directly 
 
 ## Notes
 
+**Mod compatibility:** Some older Switch 1 mods that include ExeFS patches may not work with certain games unless they've been updated for 64-bit. For example, [Mario Kart 8 Deluxe changed from ARM32 through version 3.0.3 to ARM64 in version 3.0.4](https://github.com/mdietz94/mk8dx_ap/blob/eb7883cf1e8d45f8e8df73549beb4add81050abf/switch-mod/config/config.cmake). Most Switch 1 games were already 64-bit, so this does not affect every game. ExeFS patches must also match the game's version or Build ID, even when its architecture has not changed. RomFS mods may still work as long as the game's file formats and paths have not changed.
+
 A verified ns2jb FS 4/4 session with RPC running is required for installation. Don't install twice in the same boot. If an unexpected native operation fails, stop and reboot rather than retrying a partially applied hook.
 
 The loader is a source-based beta, not a one-click app. It does not include game assets, firmware, keys or mods from other authors.
