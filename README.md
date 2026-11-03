@@ -77,8 +77,6 @@ The PC can be disconnected after installation: FS serves the mod files directly 
 
 ## Notes
 
-This beta currently installs **replacements of existing RomFS files**. Model mods are good candidates. A 200cc mod using RomFS files is also a candidate; mods that need `main`/ExeFS patching are a different path. This is not a claim that other mods or games are incompatible.
-
 A fresh, verified ns2jb session is required for each install. Don't install twice in the same boot. If an unexpected native operation fails, stop and reboot rather than retrying a partially applied hook.
 
 The loader is a source-based beta, not a one-click app. It does not include game assets, firmware, keys or mods from other authors.
