@@ -1,0 +1,15 @@
+research/**/captures/
+research/**/prepared/
+research/**/build/
+research/**/.venv/
+research/**/__pycache__/
+mods/
+*.nca
+*.nso
+*.nro
+*.keys
+*.bin
+*.pack
+*.bea
+*.zip
+.DS_Store
