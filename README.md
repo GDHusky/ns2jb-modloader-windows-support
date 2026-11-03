@@ -6,26 +6,29 @@ Load **RomFS and ExeFS mods by Title ID** on Switch 2, directly from microSD.
 
 [Download the latest release](https://github.com/SebaaMG/ns2jb-modloader/releases/latest/download/ns2jb-modloader.zip) and extract it, or clone this repository.
 
-**Mod compatibility:** Some older Switch 1 mods that include ExeFS patches may not work with certain games unless they've been updated for 64-bit. For example, [Mario Kart 8 Deluxe changed from ARM32 through version 3.0.3 to ARM64 in version 3.0.4](https://github.com/mdietz94/mk8dx_ap/blob/eb7883cf1e8d45f8e8df73549beb4add81050abf/switch-mod/config/config.cmake). Most Switch 1 games were already 64-bit, so this does not affect every game. IPS/IPS32 patches must match the target module's Build ID, as in Atmosphère. RomFS mods may still work as long as the game's file formats and paths haven't changed.
+**Mod compatibility:** Some older Switch 1 mods that include ExeFS patches may not work with certain games unless they've been updated for 64-bit. For example, [Mario Kart 8 Deluxe changed from ARM32 through version 3.0.3 to ARM64 in version 3.0.4](https://github.com/mdietz94/mk8dx_ap/blob/eb7883cf1e8d45f8e8df73549beb4add81050abf/switch-mod/config/config.cmake). Most Switch 1 games were already 64-bit, so this does not affect every game. RomFS mods may still work as long as the game's file formats and paths haven't changed.
 
 ## 1. Add your mods
 
-Put your mod files in **`ns2jb-modloader/contents/<TITLE_ID>/romfs/`** or **`exefs/`**, using each game's 16-digit Title ID. You can have mods for several games together:
+Put each mod's `romfs/` and `exefs/` folders under **`ns2jb-modloader/contents/<TITLE_ID>/`**, using each game's 16-digit Title ID. If included, copy `exefs_patches/` beside `contents/`. You can have mods for several games together:
 
 ```text
 ns2jb-modloader/
-└── contents/
-    ├── 0400c3f00006e000/              # Mario Kart World
-    │   └── romfs/
-    │       ├── ...character mod files...
-    │       └── System/
-    │           └── GymlArchive/
-    │               └── ...200cc files...
-    └── ...other game's Title ID.../
-        ├── romfs/
-        │   └── ...mod files...
-        └── exefs/
-            └── ...replacement or additional modules...
+├── contents/
+│   ├── 0400c3f00006e000/              # Mario Kart World
+│   │   └── romfs/
+│   │       ├── ...character mod files...
+│   │       └── System/
+│   │           └── GymlArchive/
+│   │               └── ...200cc files...
+│   └── ...other game's Title ID.../
+│       ├── romfs/
+│       │   └── ...mod files...
+│       └── exefs/
+│           └── ...replacement or additional modules...
+└── exefs_patches/                    # If included with the mod
+    └── ...patch name.../
+        └── <BUILD_ID>.ips
 ```
 
 **No need to install them one by one.** One command prepares the mods for all selected games. Each mod applies to its own Title ID, and the installed loader stays active when you close SmileBASIC and switch between games, until the console reboots. Mods must keep their game-relative file paths. Merge their `contents/` folders when adding several mods.
@@ -34,7 +37,7 @@ For example, if you want to install the 200cc mod for Mario Kart World and the d
 
 *You can also drag and drop your Atmosphère `contents` folder into `ns2jb-modloader/` (as long as your mods are compatible).* Copy `contents/` itself, not the outer `atmosphere/` folder. This gives you exactly the layout shown above; no conversion or extra option is needed.
 
-If a mod includes `exefs_patches/`, copy that folder beside `contents/`, keeping `<PATCH_NAME>/<BUILD_ID>.ips` inside it. No separate OunceCake download is required.
+`exefs/` contains complete files such as `main` or `subsdk0`. IPS/IPS32 patches go in `exefs_patches/<PATCH_NAME>/<BUILD_ID>.ips`; keep their filenames unchanged.
 
 RomFS supports file replacements, new files/directories and `romfs.bin`. ExeFS supports replacement/additional files, `.stub` markers, `exefs.nsp` and IPS/IPS32 module patches. Keep all parts of a combined mod together. Runtime cheats and plugins such as SaltyNX need a separate runtime and are not part of LayeredFS.
 
