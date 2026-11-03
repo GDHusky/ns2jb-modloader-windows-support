@@ -1,7 +1,7 @@
 .text
 .arch armv8.3-a
 .global _start
-.global mkw_size
+.global lfs_size
 .global original_size
 /* Context owns all data and native server references. No process-local state
  * from SmileBASIC. x18 and used callee-saved registers are preserved. */
@@ -75,17 +75,17 @@ view_loop:
  bl equal_bytes
  cbz w11, next_view
  add x8, sp, #128
- mov x9, #128
+ ldr w9, [x25, #276]
  stp x8, x9, [sp, #112]
  add x0, x19, #8
  ldr x1, [x25, #24]
  add x2, sp, #112
- mov x3, #128
+ ldr w3, [x25, #276]
  bl original_read
  cbnz w0, next_view
  add x8, sp, #128
  add x9, x25, #144
- mov x10, #128
+ ldr w10, [x25, #276]
  bl equal_bytes
  cbz w11, next_view
  add x8, x20, x22
@@ -190,10 +190,10 @@ finish:
  ldp x19, x20, [sp, #16]
  ldp x29, x30, [sp], #288
  retab
-/* GetSize preserves the native error and only extends a verified MKWorld view. */
-mkw_size:
+/* GetSize preserves the native error and only extends a verified RomFS view. */
+lfs_size:
  pacibsp
- stp x29, x30, [sp, #-240]!
+ stp x29, x30, [sp, #-288]!
  stp x19, x20, [sp, #16]
  stp x21, x22, [sp, #32]
  stp x23, x24, [sp, #48]
@@ -231,6 +231,34 @@ size_loop:
  mov x10, #80
  bl equal_bytes
  cbz w11, size_next
+ add x8, sp, #112
+ mov x9, #32
+ stp x8, x9, [sp, #96]
+ add x0, x19, #8
+ ldr x1, [x25, #16]
+ add x2, sp, #96
+ mov x3, #32
+ bl original_read
+ cbnz w0, size_next
+ add x8, sp, #112
+ add x9, x25, #112
+ mov x10, #32
+ bl equal_bytes
+ cbz w11, size_next
+ add x8, sp, #112
+ ldr w9, [x25, #276]
+ stp x8, x9, [sp, #96]
+ add x0, x19, #8
+ ldr x1, [x25, #24]
+ add x2, sp, #96
+ ldr w3, [x25, #276]
+ bl original_read
+ cbnz w0, size_next
+ add x8, sp, #112
+ add x9, x25, #144
+ ldr w10, [x25, #276]
+ bl equal_bytes
+ cbz w11, size_next
  ldr x8, [x25, #8]
  str x8, [x20]
  b size_success
@@ -248,7 +276,7 @@ size_finish:
  ldp x23, x24, [sp, #48]
  ldp x21, x22, [sp, #32]
  ldp x19, x20, [sp, #16]
- ldp x29, x30, [sp], #240
+ ldp x29, x30, [sp], #288
  retab
 /* Replay the single original GetSize instruction before its unmodified body. */
 original_size:
@@ -268,4 +296,4 @@ different:
  mov w11, #0
  ret
 .balign 8
-resident_context: .xword MKW_CONTEXT
+resident_context: .xword LFS_CONTEXT

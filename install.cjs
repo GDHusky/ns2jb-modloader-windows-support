@@ -1,149 +1,66 @@
 #!/usr/bin/env node
 'use strict';
-// Mario Kart World RomFS beta: install ALL mod folders in one qualified FS
-// session. A shared RomFS path is a hard conflict, not a silent override.
-const fs=require('node:fs'),path=require('node:path'),cp=require('node:child_process');
-const {pythonCommand,checkPythonDependencies,checkNativeTools}=require('./lib/toolchain.cjs');
-const root=__dirname,mkw=path.join(root,'research/mkw-knockout-research');
-const modsRoot=path.join(root,'MarioKartWorld','mods');
-const planDir=path.join(mkw,'prepared','probe-pack'),planFile=path.join(planDir,'overlay.json');
-const check=(ok,message)=>{if(!ok)throw Error(message)};
-const json=file=>JSON.parse(fs.readFileSync(file,'utf8'));
-const isDirectory=file=>fs.existsSync(file)&&fs.statSync(file).isDirectory();
-function cmd(executable,args){
- console.log('\n> '+[executable,...args].join(' '));
- const p=cp.spawnSync(executable,args,{cwd:root,stdio:'inherit',env:process.env});
- if(p.error)throw p.error;
- check(p.status===0,executable+' '+args[0]+' failed. See output above.');
-}
-function filesUnder(dir,base=dir){
- const files=[];
- for(const entry of fs.readdirSync(dir,{withFileTypes:true}).sort((a,b)=>a.name.localeCompare(b.name))){
-  const full=path.join(dir,entry.name);
-  check(!entry.isSymbolicLink(),'Symlinks are not supported in mods: '+full);
-  if(entry.isDirectory())files.push(...filesUnder(full,base));
-  else if(entry.isFile()){
-   if(entry.name==='.DS_Store'||entry.name==='Thumbs.db')continue;
-   files.push('/'+path.relative(base,full).split(path.sep).join('/'));
-  }else throw Error('Unsupported mod entry: '+full);
+const fs=require('node:fs'),path=require('node:path');
+const {check,titleId,writeJson}=require('./lib/common.cjs');
+const {collectMods}=require('./lib/mods.cjs');
+const root=__dirname;
+const USAGE=`Usage: node install.cjs --run-dir PATH [--title TITLE_ID] [--keep-rpc]
+       node install.cjs --check [--title TITLE_ID]
+
+Place contents/<TITLE_ID>/romfs/ or exefs/ in ns2jb-modloader/.
+Start ns2jb separately and keep its verified FS 4/4 RPC host running.
+--title can be repeated to select games or provide a target for global IPS patches.`;
+function options(argv){
+ const o={run:null,titles:[],check:false,keepRpc:false};
+ for(let i=0;i<argv.length;i++){
+  const a=argv[i];if(a==='--check')o.check=true;else if(a==='--keep-rpc')o.keepRpc=true;else if(a==='--help')o.help=true;
+  else{check(['--run-dir','--title'].includes(a),'Unknown option: '+a+'\n'+USAGE);const v=argv[++i];check(v&&!v.startsWith('--'),'Missing value after '+a);if(a==='--title')o.titles.push(titleId(v));else o.run=path.resolve(v);}
  }
- return files;
-}
-function findRomfs(mod){
- const gameId='0400c3f00006e000';
- const candidates=[
-  path.join(mod,'romfs'),
-  path.join(mod,'atmosphere','contents',gameId,'romfs'),
-  path.join(mod,'contents',gameId,'romfs'),
-  path.join(mod,gameId,'romfs')
- ].filter(isDirectory);
- check(candidates.length===1,'Expected one romfs/ folder inside '+mod+
-   ' (or atmosphere/contents/'+gameId+'/romfs).');
- const folder=candidates[0],parent=path.dirname(folder);
- check(!isDirectory(path.join(parent,'exefs')),
-  'This mod also includes exefs/ changes. This beta installs RomFS replacements only: '+mod);
- return folder;
-}
-function collectMods(){
- check(isDirectory(modsRoot),'Missing MarioKartWorld/mods/ folder.');
- const entries=fs.readdirSync(modsRoot,{withFileTypes:true})
-  .filter(entry=>!['.gitkeep','.DS_Store','Thumbs.db'].includes(entry.name))
-  .sort((a,b)=>a.name.localeCompare(b.name));
- const dirs=entries.filter(e=>e.isDirectory());
- check(dirs.length===entries.length,'Unzip your mods into MarioKartWorld/mods/. Keep each mod in its own folder.');
- const candidates=dirs.map(e=>({name:e.name,base:path.join(modsRoot,e.name)}));
- const modFolders=[];
- if(isDirectory(path.join(modsRoot,'romfs'))){
-  check(candidates.length===1,'Use either mods/romfs/ or separate mods/ModName/romfs/ folders, not both.');
-  modFolders.push({name:'Mods',base:modsRoot,romfs:path.join(modsRoot,'romfs')});
- }else for(const mod of candidates){
-  modFolders.push({...mod,romfs:findRomfs(mod.base)});
- }
- check(modFolders.length>0,'No mods found. Add folders like MarioKartWorld/mods/Characters/romfs/.');
- const conflicts=new Map(),resources=[];
- for(const mod of modFolders){
-  const paths=filesUnder(mod.romfs);
-  check(paths.length>0,'Empty romfs/ folder in '+mod.name);
-  for(const filename of paths){
-   const key=filename.toLowerCase();
-   check(!conflicts.has(key),'File conflict: '+filename+
-     ' is in both '+conflicts.get(key)+' and '+mod.name+'. Combine or remove one of those mods.');
-   conflicts.set(key,mod.name);
-   resources.push(filename);
-  }
-  mod.files=paths.length;
- }
- return {modFolders,resources};
+ check(o.help||o.check||o.run,USAGE);return o;
 }
 function verifiedRun(run){
- const result=json(path.join(run,'result.json'));
- check(result.verified&&result.rpc?.state==='listening','Selected run is not a verified listening RPC session.');
- const current=json(path.join(run,'switch2','fs-execution-current.json'));
- const proof=json(path.isAbsolute(current.file)?current.file:path.resolve(run,current.file));
- check(current.verified&&proof.verified&&proof.session===path.basename(run),
-  'Selected run has no matching verified FS 4/4 execution proof.');
- return run;
+ const read=f=>JSON.parse(fs.readFileSync(f,'utf8'));const result=read(path.join(run,'result.json'));
+ check(result.verified&&result.rpc?.state==='listening'&&!result.completed,'Selected ns2jb run is not a verified listening RPC session');
+ const current=read(path.join(run,'switch2/fs-execution-current.json')),proof=read(path.isAbsolute(current.file)?current.file:path.resolve(run,current.file));
+ check(current.verified&&proof.verified&&proof.session===path.basename(run),'Selected run has no matching verified FS 4/4 proof');return run;
 }
-async function main(){
- const args=process.argv.slice(2);
- check(args.length===1&&args[0]==='--check'||
-  args.length===2&&args[0]==='--run-dir'&&args[1]&&!args[1].startsWith('--'),
-  'Usage: node install.cjs --run-dir PATH\n       node install.cjs --check\nStart ns2jb separately and keep its verified FS 4/4 RPC host running.');
- const {modFolders,resources}=collectMods();
- console.log('\nMario Kart World mods:');
- for(const mod of modFolders)console.log('  '+mod.name+' ('+mod.files+' file(s))');
- console.log('Total: '+resources.length+' RomFS replacement(s).');
- if(process.argv[2]==='--check'){console.log('Mod folders checked. No changes were made.');return}
- process.env.NS2_WORKSPACE=root;
- checkPythonDependencies();
- checkNativeTools();
- const run=verifiedRun(path.resolve(args[1])),session=path.basename(run);
- const capture=path.join(mkw,'captures',session);
- check(!fs.existsSync(path.join(capture,'resident-install.json')),
-  'This session already has a resident installation. Do not install twice; reboot before trying again.');
- console.log('\nUsing existing ns2jb FS session: '+session);
- cmd(process.execPath,['research/superstars-mod/capture-fs.cjs',run]);
- cmd(process.execPath,['research/mkw-knockout-research/read-content.cjs',run,'--metadata-only']);
- const inv=json(path.join(capture,'mkw-inventory.json'));
- check(inv.complete&&inv.temporarySessionClosed&&!(inv.cleanupErrors||[]).length&&inv.title==='0400c3f00006e000',
-  'Mario Kart World metadata capture did not qualify.');
- const view=inv.mounts.find(v=>v.label==='update');
- check(view,'Mario Kart World installed update not found.');
- const originals=resources.map(file=>{
-  const matches=view.entries.filter(x=>x.type==='file'&&x.path===file);
-  check(matches.length===1,'File not found in this Mario Kart World version: '+file);
-  check(matches[0].size<=32*1024*1024,'Original file exceeds 32 MiB capture limit: '+file);
-  return {file,size:matches[0].size};
- });
- let batch=[],size=0;
- function flush(){
-  if(batch.length){cmd(process.execPath,['research/mkw-knockout-research/read-more.cjs',run,...batch]);batch=[];size=0;}
- }
- for(const item of originals){
-  if(batch.length&&size+item.size>32*1024*1024)flush();
-  batch.push(item.file);size+=item.size;
- }
- flush();
- cmd(pythonCommand(),['research/mkw-knockout-research/prepare-probe.py',capture,
-  '--resources',...modFolders.map(x=>path.dirname(x.romfs)),'--out',planDir]);
- const plan=json(planFile);
- check(plan.session===session&&plan.titleId==='0400c3f00006e000'&&plan.resources?.length===resources.length,
-  'Prepared mod pack does not match this console session.');
- cmd(process.execPath,['research/mkw-knockout-research/upload-pack.cjs',run,planFile]);
- cmd(process.execPath,['research/mkw-knockout-research/install-resident.cjs',run,planFile]);
- const journal=json(path.join(capture,'resident-install.json'));
- check(journal.verified&&journal.active&&journal.hookAttached,
-  'Native loader did not qualify. Do not continue.');
- const {apply}=require('./research/superstars-mod/restore-stock-ro.cjs');
- console.log('\n> Restoring original RO service');
- const result=await apply(run,{residentDirectory:capture,contextMagic:'MKWFS002'});
- check(result.stockRoProtocolVerified,'Original RO service verification failed.');
- console.log('\nREADY — All '+modFolders.length+' mod(s) installed for this boot.');
- console.log('Stop the first terminal with Ctrl+C and wait for cleanup.');
- console.log('Then close SmileBASIC (do not reboot) and open Mario Kart World.');
+async function main(argv=process.argv.slice(2)){
+ const o=options(argv);if(o.help){console.log(USAGE);return;}
+ const collection=collectMods(root);
+ if(o.titles.length){collection.games=collection.games.filter(g=>o.titles.includes(g.titleId));for(const id of o.titles)if(!collection.games.some(g=>g.titleId===id))collection.games.push({titleId:id,romfs:[],exefs:[],patches:[],mods:[]});}
+ for(const g of collection.games)console.log(g.titleId+': '+g.romfs.filter(f=>f.type==='file').length+' RomFS files, '+g.exefs.length+' ExeFS replacements, '+g.patches.length+' module patches'+(g.romfsImage?', romfs.bin':''));
+ if(collection.patches.length)console.log(collection.patches.length+' global ExeFS patch file(s); Build IDs will be matched to installed games.');
+ if(o.check){console.log('Mod layout checked. No console connection was opened.');return;}
+ const {checkPythonDependencies,checkNativeTools}=require('./lib/toolchain.cjs');checkPythonDependencies();checkNativeTools();
+ const run=verifiedRun(o.run),session=path.basename(run),directory=path.join(root,'state',session);fs.mkdirSync(directory,{recursive:true,mode:0o700});
+ // The shared run lock also prevents installation from a second checkout.
+ const lock=path.join(run,'ns2jb-modloader-install.json');fs.writeFileSync(lock,JSON.stringify({session,directory,started:new Date().toISOString(),status:'preparing'})+'\n',{flag:'wx',mode:0o600});
+ const update=value=>writeJson(lock,{session,directory,...value});
+ try{
+  console.log('Using ns2jb session '+session);
+  const {captureNative}=require('./lib/native-capture.cjs'),capture=await captureNative(run,directory);
+  if(collection.patches.length&&!o.titles.length){
+   const {attachGame}=require('./lib/game-files/session.cjs'),{discoverApplications}=require('./lib/game-files/content.cjs'),a=await attachGame(run);
+   try{for(const app of await discoverApplications(a))if(!collection.games.some(g=>g.titleId===app.contentTitle))collection.games.push({titleId:app.contentTitle,romfs:[],exefs:[],patches:[],stubs:[],autoForGlobalPatches:true});}finally{await a.close();}
+  }
+  const {captureGame}=require('./lib/content.cjs'),captures=[];
+  for(const g of collection.games){const dir=path.join(directory,'games',g.titleId);console.log('Inspecting '+g.titleId);try{captures.push({directory:dir,inventory:await captureGame(run,g,dir,collection.patches)});}catch(error){if(!g.autoForGlobalPatches||error.code!=='CONTENT_UNAVAILABLE')throw error;g.unavailable=true;}}
+  collection.games=collection.games.filter(g=>!g.unavailable);
+  const {prepare}=require('./lib/prepare.cjs'),prepared=await prepare(collection,captures,path.join(directory,'prepared'),session);console.log('Prepared '+prepared.plan.views.length+' RomFS views and '+prepared.plan.exefs.length+' ExeFS modules');
+  const packVerification=await require('./lib/verify-plan.cjs').verifyPlan(prepared.plan,prepared.file);writeJson(path.join(directory,'prepared/verification.json'),packVerification);
+  // Compile and validate layout before changing a native instruction.
+  const {buildAll}=require('./lib/native.cjs');
+  const {buildContext}=require('./lib/context.cjs');const native=await buildAll(0x4000000000n,0x6000000000n,prepared.plan,{capture,directory:path.join(directory,'offline-build')});buildContext(prepared.plan,{fileObject:{object:0x6100000000n},filesystem:{object:0x6100001000n}},0x4000000000n,0x6000000000n,native);
+  const {pythonCommand}=require('./lib/toolchain.cjs'),cp=require('node:child_process');
+  const qualification=cp.spawnSync(pythonCommand(),[path.join(root,'native/verify.py'),path.join(directory,'prepared/overlay.json'),path.join(directory,'offline-build')],{stdio:'inherit'});if(qualification.error)throw qualification.error;check(qualification.status===0,'Compiled ARM64 reader qualification failed; no native hook was installed');
+  const {upload}=require('./lib/upload.cjs');await upload(run,prepared.plan,prepared.file,directory);
+  update({status:'installing',titleIds:prepared.plan.titleIds});
+  const resident=await require('./lib/resident.cjs').install(run,prepared.plan,directory,capture);check(resident.verified,'Native overlay verification failed');
+  if(o.keepRpc){update({status:'installed-rpc-held',titleIds:prepared.plan.titleIds});console.log('INSTALLED — RPC stays open. Stock RO restoration and game handoff have not run.');return;}
+  const result=await require('./lib/native/handoff.cjs').apply(run,{residentDirectory:directory,contextMagic:'NS2LFS01'});check(result.stockRoProtocolVerified,'Stock RO verification failed');
+  resident.stockRoRestored=true;resident.readyForGameHandoff=true;resident.handoff=result;writeJson(path.join(directory,'resident-install.json'),resident);
+  update({status:'ready',titleIds:prepared.plan.titleIds});console.log('READY — Stop your ns2jb host with Ctrl+C and wait for cleanup. Close SmileBASIC without rebooting, then open your game.');
+ }catch(error){update({status:'stopped',error:error.message,inspectBeforeRetry:true});throw error;}
 }
-main().catch(error=>{
- console.error('\nINSTALL STOPPED: '+(error?.message||error));
- console.error('If the FS hook may already be installed, restart the console before retrying.');
- process.exitCode=1;
-});
+module.exports={main,options,verifiedRun};
+if(require.main===module)main().catch(error=>{console.error('INSTALL STOPPED: '+error.message);process.exitCode=1;});
