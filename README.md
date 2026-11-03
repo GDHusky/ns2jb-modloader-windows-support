@@ -31,7 +31,7 @@ For an extracted 200cc download containing `200cc/romfs/System/GymlArchive/`, co
 
 You can also use the standard Atmosphère folder layout inside each mod: `atmosphere/contents/0400c3f00006e000/romfs/`.
 
-## 2. One-time PC setup
+## 2. Set up and install
 
 You need your own Mario Kart World game/update on Switch 2, a microSD card, and a supported **SmileBASIC + ns2jb** setup (tested on firmware 23.0.1).
 
@@ -50,15 +50,19 @@ The virtual environment may have **any name and location**; `.venv` above is jus
 
 This setup is done once. Use the same environment variables and activated Python environment in both terminals.
 
-**If you already have FS 4/4 verified and RPC running with ns2jb**, keep that host running. After setting up the PC dependencies above, skip `node start.cjs` and install from a second terminal using your existing run directory:
+**Choose either 2.a or 2.b below, depending on your current ns2jb session.**
+
+### 2.a. You already have FS 4/4 verified and RPC running
+
+Keep your existing ns2jb host running. In a second terminal opened in `ns2jb-modloader/`, activate your Python environment and install using your existing run directory:
 
 ```sh
 node install.cjs --run-dir "/path/to/ns2jb/runs/switch2-SESSION"
 ```
 
-The installer checks that run's verified FS 4/4 proof and listening RPC state. Use a session where no modloader has been installed yet. Then follow the **READY** instructions below.
+The installer checks that run's verified FS 4/4 proof and listening RPC state. Use a session where no modloader has been installed yet. When it says **READY**, go directly to step 3.
 
-## 3. Install all mods
+### 2.b. You need to start ns2jb first
 
 **First terminal:**
 
@@ -76,8 +80,11 @@ node install.cjs
 
 When using `node start.cjs`, **no mod names or RPC session paths need to be typed**. The installer detects the active session, combines the mods and verifies the installation.
 
-When it says **READY**:
-1. Stop the first terminal with **Ctrl+C** and let ns2jb finish cleanup.
+## 3. Open Mario Kart World
+
+Once either installation method says **READY**:
+
+1. Stop the terminal running the ns2jb host with **Ctrl+C** and let ns2jb finish cleanup.
 2. Close SmileBASIC **without restarting** the Switch 2.
 3. Open Mario Kart World.
 
