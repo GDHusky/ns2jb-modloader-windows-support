@@ -26,6 +26,11 @@ function verifiedRun(run){
  const current=read(path.join(run,'switch2/fs-execution-current.json')),proof=read(path.isAbsolute(current.file)?current.file:path.resolve(run,current.file));
  check(current.verified&&proof.verified&&proof.session===path.basename(run),'Selected run has no matching verified FS 4/4 proof');return run;
 }
+function warnIgnoredPatches(plan){
+ const patches=plan.ignoredPatches||[];if(!patches.length)return;
+ console.warn('WARNING: '+patches.length+' IPS patch'+(patches.length===1?' was':'es were')+' not applied (no matching installed NSO Build ID).');
+ for(const patch of patches)console.warn('  '+patch);
+}
 async function main(argv=process.argv.slice(2)){
  const o=options(argv);if(o.help){console.log(USAGE);return;}
  function describe(collection){
@@ -51,6 +56,7 @@ async function main(argv=process.argv.slice(2)){
   for(const g of collection.games){const dir=path.join(directory,'games',g.titleId);console.log('Inspecting '+g.titleId);try{captures.push({directory:dir,inventory:await captureGame(run,g,dir,collection.patches)});}catch(error){if(!g.autoForGlobalPatches||error.code!=='CONTENT_UNAVAILABLE')throw error;g.unavailable=true;}}
   collection.games=collection.games.filter(g=>!g.unavailable);
   const {prepare}=require('./lib/prepare.cjs'),prepared=await prepare(collection,captures,path.join(directory,'prepared'),session);console.log('Prepared '+prepared.plan.views.length+' RomFS views and '+prepared.plan.exefs.length+' ExeFS modules');
+  warnIgnoredPatches(prepared.plan);
   const packVerification=await require('./lib/verify-plan.cjs').verifyPlan(prepared.plan,prepared.file);writeJson(path.join(directory,'prepared/verification.json'),packVerification);
   // Relocate the release-qualified templates and validate the actual layout.
   const {buildAll}=require('./lib/native.cjs');
@@ -64,5 +70,5 @@ async function main(argv=process.argv.slice(2)){
   update({status:'ready',titleIds:prepared.plan.titleIds});console.log('READY — Stop your ns2jb host with Ctrl+C and wait for cleanup. Close SmileBASIC without rebooting, then open your game.');
  }catch(error){update({status:'stopped',error:error.message,inspectBeforeRetry:true});throw error;}
 }
-module.exports={main,options,verifiedRun};
+module.exports={main,options,verifiedRun,warnIgnoredPatches};
 if(require.main===module)main().catch(error=>{console.error('INSTALL STOPPED: '+error.message);process.exitCode=1;});
