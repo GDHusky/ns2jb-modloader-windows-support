@@ -53,7 +53,7 @@ async function main(argv=process.argv.slice(2)){
    try{for(const app of await discoverApplications(a))if(!collection.games.some(g=>g.titleId===app.contentTitle))collection.games.push({titleId:app.contentTitle,romfs:[],exefs:[],patches:[],stubs:[],autoForGlobalPatches:true});}finally{await a.close();}
   }
   const {captureGame}=require('./lib/content.cjs'),captures=[];
-  for(const g of collection.games){const dir=path.join(directory,'games',g.titleId);console.log('Inspecting '+g.titleId);try{captures.push({directory:dir,inventory:await captureGame(run,g,dir,collection.patches)});}catch(error){if(!g.autoForGlobalPatches||!['CONTENT_UNAVAILABLE','CONTENT_LICENSE_UNAVAILABLE'].includes(error.code))throw error;g.unavailable=true;console.warn('WARNING: Could not inspect '+g.titleId+' for global IPS patches: '+error.message);}}
+  for(const g of collection.games){const dir=path.join(directory,'games',g.titleId);console.log('Inspecting '+g.titleId);try{captures.push({directory:dir,inventory:await captureGame(run,g,dir,collection.patches)});}catch(error){if(!g.autoForGlobalPatches||!error.captureCleanupComplete||!['CONTENT_UNAVAILABLE','CONTENT_LICENSE_UNAVAILABLE'].includes(error.code))throw error;g.unavailable=true;console.warn('WARNING: Could not inspect '+g.titleId+' for global IPS patches: '+error.message);}}
   collection.games=collection.games.filter(g=>!g.unavailable);
   const {prepare}=require('./lib/prepare.cjs'),prepared=await prepare(collection,captures,path.join(directory,'prepared'),session);console.log('Prepared '+prepared.plan.views.length+' RomFS views and '+prepared.plan.exefs.length+' ExeFS modules');
   warnIgnoredPatches(prepared.plan);
