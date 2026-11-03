@@ -44,7 +44,7 @@ For example, if you want to install the 200cc mod for Mario Kart World and the d
 
 ## 2. Load your mods
 
-With **FS 4/4 verified and RPC running**, keep the ns2jb host open. Open another terminal and run these commands, replacing the example path with the path to `ModLoader/` on your PC:
+With **FS 4/4 verified and RPC running**, keep the ns2jb host open. Open another terminal and run these commands, replacing the example path with the path to the extracted `ModLoader/` folder:
 
 ```sh
 cd "/path/to/extracted/zip/ModLoader"
