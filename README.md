@@ -30,7 +30,7 @@ ns2jb-modloader/
 
 **No need to install them one by one.** One command prepares the mods for all selected games. Each mod applies to its own Title ID, and the installed loader stays active when you close SmileBASIC and switch between games, until the console reboots. Mods must keep their game-relative file paths. Merge their `contents/` folders when adding several mods.
 
-For a 200cc download containing `200cc/romfs/System/GymlArchive/`, put its `romfs/` under `contents/0400c3f00006e000/`, as shown above. Keep the paths inside `romfs/` unchanged.
+For example, if you want to install the 200cc mod for Mario Kart World and the download contains `200cc/romfs/System/GymlArchive/`, copy its `romfs/` folder into `ns2jb-modloader/contents/0400c3f00006e000/`. Keep the paths inside `romfs/` unchanged.
 
 *You can also drag and drop your Atmosphère `contents` folder into `ns2jb-modloader/` (as long as your mods are compatible).* Copy `contents/` itself, not the outer `atmosphere/` folder. This gives you exactly the layout shown above; no conversion or extra option is needed.
 
