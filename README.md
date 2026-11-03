@@ -37,44 +37,50 @@ You need your own Mario Kart World game/update on Switch 2, a microSD card, and 
 
 Install **Node.js, Python 3, Zig and GNU binutils** (`readelf`), and download [ns2jb](https://gitlab.com/kurumuz/ns2jb).
 
-In a terminal (Linux/WSL) opened in `ns2jb-modloader/`, set their locations:
+Open a terminal (Linux/WSL) in the downloaded `ns2jb-modloader/` folder. Run these commands once to create a Python environment and install the required packages:
 
 ```sh
-export NS2_UPSTREAM="/path/to/ns2jb"
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -r requirements-test.txt
 ```
 
-The virtual environment may have **any name and location**; `.venv` above is just an example. Python and Zig are found on PATH, so activating your own environment works. You can also set `PYTHON="/path/to/python"` or `ZIG="/path/to/zig"` to select an executable explicitly. No paths from the author's PC are required. Keep `node` and `readelf` on PATH.
+`python3 -m venv .venv` creates the environment. `source .venv/bin/activate` activates it **in the current terminal**. Run that activation command again whenever you open another terminal to use the installer; you do not need to recreate the environment or reinstall its packages.
 
-This setup is done once. Use the same environment variables and activated Python environment in both terminals.
+The environment may have **any name and location**; `.venv` is the example used below. If you use another location, replace `.venv/bin/activate` with your environment's `bin/activate` path. Python and Zig are found on PATH. You can also set `PYTHON="/path/to/python"` or `ZIG="/path/to/zig"` to select an executable explicitly. Keep `node` and `readelf` on PATH.
 
 **Choose either 2.a or 2.b below, depending on your current ns2jb session.**
 
 ### 2.a. You already have FS 4/4 verified and RPC running
 
-Keep your existing ns2jb host running. In a second terminal opened in `ns2jb-modloader/`, activate your Python environment and install using your existing run directory:
+Keep your existing ns2jb host running. Open a **second terminal in `ns2jb-modloader/`** and run:
 
 ```sh
+source .venv/bin/activate
 node install.cjs --run-dir "/path/to/ns2jb/runs/switch2-SESSION"
 ```
+
+Replace `/path/to/ns2jb/runs/switch2-SESSION` with the actual run directory for the session your host is currently running. It is a `switch2-...` folder inside your ns2jb checkout's `runs/` directory; do not type `SESSION` literally.
 
 The installer checks that run's verified FS 4/4 proof and listening RPC state. Use a session where no modloader has been installed yet. When it says **READY**, go directly to step 3.
 
 ### 2.b. You need to start ns2jb first
 
-**First terminal:**
+**First terminal, opened in `ns2jb-modloader/`:** Replace `/path/to/ns2jb` with the folder where you downloaded Kurumuz's ns2jb (the one containing `run.cjs`), then run:
 
 ```sh
+source .venv/bin/activate
+export NS2_UPSTREAM="/path/to/ns2jb"
 node start.cjs
 ```
 
 Follow the instructions shown by ns2jb in SmileBASIC. Wait until it says **FS 4/4 verified**. Keep this terminal open.
 
-**Second terminal:**
+**Open a second terminal in `ns2jb-modloader/`:** Use the same ns2jb folder path as in the first terminal and run:
 
 ```sh
+source .venv/bin/activate
+export NS2_UPSTREAM="/path/to/ns2jb"
 node install.cjs
 ```
 
