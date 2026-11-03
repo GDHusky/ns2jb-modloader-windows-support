@@ -6,7 +6,7 @@ Load **RomFS and ExeFS mods by Title ID** on Switch 2, directly from microSD.
 
 [Download the latest release](https://github.com/SebaaMG/ns2jb-modloader/releases/latest/download/ns2jb-modloader.zip) and extract it, or clone this repository.
 
-**Mod compatibility:** Some older Switch 1 mods that include ExeFS patches may not work with certain games unless they've been updated for 64-bit. For example, [Mario Kart 8 Deluxe changed from ARM32 through version 3.0.3 to ARM64 in version 3.0.4](https://github.com/mdietz94/mk8dx_ap/blob/eb7883cf1e8d45f8e8df73549beb4add81050abf/switch-mod/config/config.cmake). Most Switch 1 games were already 64-bit, so this does not affect every game. ExeFS patches must also match the game's version or Build ID, even when its architecture has not changed. RomFS mods may still work as long as the game's file formats and paths have not changed.
+**Mod compatibility:** Some older Switch 1 mods that include ExeFS patches may not work with certain games unless they've been updated for 64-bit. For example, [Mario Kart 8 Deluxe changed from ARM32 through version 3.0.3 to ARM64 in version 3.0.4](https://github.com/mdietz94/mk8dx_ap/blob/eb7883cf1e8d45f8e8df73549beb4add81050abf/switch-mod/config/config.cmake). Most Switch 1 games were already 64-bit, so this does not affect every game. IPS/IPS32 patches must match the target module's Build ID, as in Atmosphère. RomFS mods may still work as long as the game's file formats and paths haven't changed.
 
 ## 1. Add your mods
 
