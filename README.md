@@ -17,13 +17,17 @@ ns2jb-modloader/
         │       └── ...mod files...
         ├── 200cc/
         │   └── romfs/
-        │       └── ...mod files...
+        │       └── System/
+        │           └── GymlArchive/
+        │               └── ...200cc files...
         └── OtherMod/
             └── romfs/
                 └── ...mod files...
 ```
 
 **No need to install them one by one.** The installer finds all mod folders and loads their RomFS file replacements together. Mods must have their original RomFS file paths. If two mods change the same file, the installer tells you instead of silently overwriting one.
+
+For an extracted 200cc download containing `200cc/romfs/System/GymlArchive/`, copy the **inner `200cc` folder** into `MarioKartWorld/mods/` (not its parent download folder).
 
 You can also use the standard Atmosphère folder layout inside each mod: `atmosphere/contents/0400c3f00006e000/romfs/`.
 
