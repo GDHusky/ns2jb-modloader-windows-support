@@ -1,20 +1,41 @@
 # ns2jb-modloader
 
-**Load Mario Kart World RomFS mods on a real Switch 2, using a regular microSD card.**
+Load **Mario Kart World** RomFS mods on a real Switch 2 using a regular microSD card.
 
-Private beta — tested with Mario Kart World. The same FS replacement technique has also been demonstrated with Mario Party Superstars. Other games have not yet been tested.
+**Private beta.** FS-based game modding has been demonstrated in Mario Kart World and Mario Party Superstars. Other games have not yet been tested.
 
-The mod remains active after closing SmileBASIC. It lasts until you reboot the console; the original installed game files are not changed.
+## 1. Add your mods
 
-## What you need
+Put **all** the mods you want in `MarioKartWorld/mods/`, each in its own folder with `romfs/` inside:
 
-- Switch 2 with the supported SmileBASIC/ns2jb exploit (tested on firmware **23.0.1**).
-- Your own installed **Mario Kart World** and a regular microSD card containing a `/roms` folder.
-- A PC for **initial setup only**. Node.js, Python 3, Zig, and the following two projects:
-  - [Kurumuz's ns2jb](https://gitlab.com/kurumuz/ns2jb)
-  - [OunceCake from IZ2S-Platform](https://github.com/byizmysh/IZ2S-Platform) (`modules/iz-exchange/server/ouncecake/engine`)
+```text
+ns2jb-modloader/
+└── MarioKartWorld/
+    └── mods/
+        ├── Characters/
+        │   └── romfs/
+        │       └── ...mod files...
+        ├── 200cc/
+        │   └── romfs/
+        │       └── ...mod files...
+        └── OtherMod/
+            └── romfs/
+                └── ...mod files...
+```
 
-Set these paths in your terminal (Linux/WSL):
+**No need to install them one by one.** The installer finds all mod folders and loads their RomFS file replacements together. Mods must have their original RomFS file paths. If two mods change the same file, the installer tells you instead of silently overwriting one.
+
+You can also use the standard Atmosphère folder layout inside each mod: `atmosphere/contents/0400c3f00006e000/romfs/`.
+
+## 2. One-time PC setup
+
+You need your own Mario Kart World game/update on Switch 2, a microSD card, and a supported **SmileBASIC + ns2jb** setup (tested on firmware 23.0.1).
+
+Install **Node.js, Python 3 and Zig**, and download:
+- [Kurumuz's ns2jb](https://gitlab.com/kurumuz/ns2jb)
+- [IZ2S-Platform / OunceCake](https://github.com/byizmysh/IZ2S-Platform)
+
+In a terminal (Linux/WSL) opened in `ns2jb-modloader/`, set their locations:
 
 ```sh
 export NS2_UPSTREAM="/path/to/ns2jb"
@@ -24,40 +45,39 @@ python3 -m venv research/superstars-mod/.venv
 research/superstars-mod/.venv/bin/pip install -r requirements-test.txt
 ```
 
-## Install a mod
+This setup is done once. Use the same environment variables in both terminals.
 
-**1. Put the mod files inside a `romfs` folder.** Keep the original folder paths. You can combine model and other RomFS replacements in **one** folder:
+## 3. Install all mods
 
-```text
-mods/
-  MyMod/
-    romfs/
-      ...same file paths as in Mario Kart World's RomFS...
-```
-
-**2. Start ns2jb** (with the usual Switch 2 LAN/SmileBASIC connection):
+**First terminal:**
 
 ```sh
 node start.cjs
 ```
 
-On the Switch, use the START command shown by ns2jb. Wait until **FS 4/4** is verified. Keep this terminal open.
+Follow the instructions shown by ns2jb in SmileBASIC. Wait until it says **FS 4/4 verified**. Keep this terminal open.
 
-**3. In a second terminal, install the mod:**
+**Second terminal:**
 
 ```sh
-node install.cjs mods/MyMod "/path/to/current/ns2jb/runs/switch2-XXXXXX"
+node install.cjs
 ```
 
-Use the **new run directory from this session**, not an old one. If the command prints **READY**, stop the first terminal with Ctrl+C and wait for ns2jb to finish its cleanup. Then close SmileBASIC (do **not** reboot), and open Mario Kart World.
+That's it — **no mod names or RPC session paths to type**. The installer detects the active session, combines the mods and verifies the installation.
 
-That's it. The mod is served by the console's FS process from microSD, so the PC is no longer needed once installation is complete.
+When it says **READY**:
+1. Stop the first terminal with **Ctrl+C** and let ns2jb finish cleanup.
+2. Close SmileBASIC **without restarting** the Switch 2.
+3. Open Mario Kart World.
+
+The PC can be disconnected after installation: FS serves the mod files directly from the microSD. The in-memory loader stops working after a reboot, so mods must be installed again for a new boot.
 
 ## Notes
 
-- This first beta handles **replacements of existing RomFS files**. Model mods are a good first test. A 200cc mod also fits if it replaces RomFS resources; patches to the game's `main` executable use a separate CodeFS method.
-- The installer validates your game's actual file paths/version and refuses mismatches. An untested game is **not** the same as an incompatible game.
-- Don't run installation twice in the same session. If a native operation fails after the hook starts, **reboot before retrying**; don't force cleanup or reuse a previous session.
-- This is a source-based tester build, **not yet a one-click release**. No Nintendo files, game assets, firmware, keys or other people's mods are included.
+This beta currently installs **replacements of existing RomFS files**. Model mods are good candidates. A 200cc mod using RomFS files is also a candidate; mods that need `main`/ExeFS patching are a different path. This is not a claim that other mods or games are incompatible.
 
-Credits: [pepsipu](https://gitlab.com/pepsipu/ns2jb), [Kurumuz](https://gitlab.com/kurumuz/ns2jb), [OunceCake](https://github.com/byizmysh/IZ2S-Platform). The FS-resident mod reader and handoff implementation are documented in the source.
+A fresh, verified ns2jb session is required for each install. Don't install twice in the same boot. If an unexpected native operation fails, stop and reboot rather than retrying a partially applied hook.
+
+The loader is a source-based beta, not a one-click app. It does not include game assets, firmware, keys or mods from other authors.
+
+**Credits:** [pepsipu](https://gitlab.com/pepsipu/ns2jb), [Kurumuz](https://gitlab.com/kurumuz/ns2jb), [IZ2S / OunceCake](https://github.com/byizmysh/IZ2S-Platform).

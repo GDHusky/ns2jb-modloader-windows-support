@@ -3,7 +3,9 @@ research/**/prepared/
 research/**/build/
 research/**/.venv/
 research/**/__pycache__/
-mods/
+MarioKartWorld/mods/*
+!MarioKartWorld/mods/.gitkeep
+.ns2jb-start.json
 *.nca
 *.nso
 *.nro
