@@ -5,6 +5,8 @@ __pycache__/
 **/__pycache__/
 contents/*
 !contents/.gitkeep
+sd-card-root/ns2jb-modloader/contents/*
+!sd-card-root/ns2jb-modloader/contents/.gitkeep
 exefs_patches/
 *.nca
 *.nso

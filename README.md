@@ -4,13 +4,15 @@ Load **RomFS and ExeFS mods by Title ID** on Switch 2, directly from microSD.
 
 **Supported firmware: 23.0.1.** Requires a microSD and an existing [ns2jb](https://gitlab.com/kurumuz/ns2jb) **FS 4/4 session with RPC running**.
 
-[Download](https://github.com/SebaaMG/ns2jb-modloader/releases/download/v0.2.0-rc.1/ns2jb-modloader.zip) and extract it, or clone this repository.
+[Download](https://github.com/SebaaMG/ns2jb-modloader/releases/download/v0.2.0-rc.1/ns2jb-modloader.zip) and extract the ZIP on your PC.
 
 **Mod compatibility:** Some older Switch 1 ExeFS mods need updates for games that changed from 32-bit to 64-bit, such as [Mario Kart 8 Deluxe](https://github.com/mdietz94/mk8dx_ap/blob/eb7883cf1e8d45f8e8df73549beb4add81050abf/switch-mod/config/config.cmake). Most Switch 1 games were already 64-bit. RomFS mods may still work if the game's file formats and paths are unchanged.
 
 **PC:** Linux/WSL and Node.js 22+ (the runtime used for ns2jb).
 
 ## 1. Add your mods
+
+Copy the contents of `sd-card-root/` from the extracted ZIP to your SD card root. This creates `SD:/ns2jb-modloader/contents/`.
 
 *You can drag and drop your Atmosphère `contents` folder into `SD:/ns2jb-modloader/` (as long as your mods are compatible).*
 
@@ -42,9 +44,10 @@ For example, if you want to install the 200cc mod for Mario Kart World and the d
 
 ## 2. Load your mods
 
-With **FS 4/4 verified and RPC running**, keep the ns2jb host open. In another terminal, open the extracted `ns2jb-modloader/` folder on your PC and run:
+With **FS 4/4 verified and RPC running**, keep the ns2jb host open. In another terminal, enter the extracted ZIP's **`ModLoader/` folder on your PC** and run (replace the example path with yours):
 
 ```sh
+cd "/path/to/extracted/zip/ModLoader"
 node load.cjs
 ```
 
