@@ -35,21 +35,21 @@ You can also use the standard Atmosphère folder layout inside each mod: `atmosp
 
 You need your own Mario Kart World game/update on Switch 2, a microSD card, and a supported **SmileBASIC + ns2jb** setup (tested on firmware 23.0.1).
 
-Install **Node.js, Python 3, Zig and GNU binutils** (`readelf`), and download [ns2jb](https://gitlab.com/kurumuz/ns2jb).
+Install **Node.js, Python 3, Zig and GNU binutils** (`readelf`). This project uses an externally established **ns2jb FS 4/4 session with RPC running**. Set up [ns2jb](https://gitlab.com/kurumuz/ns2jb) separately using your preferred workflow; this repository does not download or launch it.
 
 Open a terminal (Linux/WSL) in the downloaded `ns2jb-modloader/` folder. Run these commands once to create a Python environment and install the required packages:
 
 ```sh
 python3 -m venv .venv
 source .venv/bin/activate
-python3 -m pip install -r requirements-test.txt
+python3 -m pip install -r requirements.txt
 ```
 
 `python3 -m venv .venv` creates the environment. `source .venv/bin/activate` activates it **in the current terminal**. Run that activation command again whenever you open another terminal to use the installer; you do not need to recreate the environment or reinstall its packages.
 
 The environment may have **any name and location**; `.venv` is the example used below. If you use another location, replace `.venv/bin/activate` with your environment's `bin/activate` path. Python and Zig are found on PATH. You can also set `PYTHON="/path/to/python"` or `ZIG="/path/to/zig"` to select an executable explicitly. Keep `node` and `readelf` on PATH.
 
-**Choose either 2.a or 2.b below, depending on your current ns2jb session.**
+**Choose 2.a if your session is ready, or 2.b if you still need to establish it.**
 
 ### 2.a. You already have FS 4/4 verified and RPC running
 
@@ -64,31 +64,19 @@ Replace `/path/to/ns2jb/runs/switch2-SESSION` with the actual run directory for 
 
 The installer checks that run's verified FS 4/4 proof and listening RPC state. Use a session where no modloader has been installed yet. When it says **READY**, go directly to step 3.
 
+You can check the mod folder layout without contacting the console:
+
+```sh
+node install.cjs --check
+```
+
 ### 2.b. You need to start ns2jb first
 
-**First terminal, opened in `ns2jb-modloader/`:** Replace `/path/to/ns2jb` with the folder where you downloaded Kurumuz's ns2jb (the one containing `run.cjs`), then run:
-
-```sh
-source .venv/bin/activate
-export NS2_UPSTREAM="/path/to/ns2jb"
-node start.cjs
-```
-
-Follow the instructions shown by ns2jb in SmileBASIC. Wait until it says **FS 4/4 verified**. Keep this terminal open.
-
-**Open a second terminal in `ns2jb-modloader/`:** Use the same ns2jb folder path as in the first terminal and run:
-
-```sh
-source .venv/bin/activate
-export NS2_UPSTREAM="/path/to/ns2jb"
-node install.cjs
-```
-
-When using `node start.cjs`, **no mod names or RPC session paths need to be typed**. The installer detects the active session, combines the mods and verifies the installation.
+Follow the setup and launch instructions in your [ns2jb checkout](https://gitlab.com/kurumuz/ns2jb). Wait for **FS 4/4 verified**, with RPC kept running, and leave that host terminal open. Then return to **2.a** to install the mods.
 
 ## 3. Open Mario Kart World
 
-Once either installation method says **READY**:
+Once the installer says **READY**:
 
 1. Stop the terminal running the ns2jb host with **Ctrl+C** and let ns2jb finish cleanup.
 2. Close SmileBASIC **without restarting** the Switch 2.

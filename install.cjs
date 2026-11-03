@@ -84,47 +84,11 @@ function verifiedRun(run){
   'Selected run has no matching verified FS 4/4 execution proof.');
  return run;
 }
-function currentSession(runDirectory){
- if(runDirectory)return verifiedRun(path.resolve(runDirectory));
- const configFile=path.join(root,'.ns2jb-start.json');
- check(fs.existsSync(configFile),'Run node start.cjs first, then wait for FS 4/4.');
- const config=json(configFile);
- const upstream=process.env.NS2_UPSTREAM;
- check(upstream&&path.resolve(upstream)===config.upstream,
-  'NS2_UPSTREAM differs from the one used to start ns2jb.');
- const started=Date.parse(config.started);
- check(Number.isFinite(started),'Invalid start marker. Run node start.cjs again.');
- const runsFolder=path.join(config.upstream,'runs');
- check(isDirectory(runsFolder),'No ns2jb runs folder. Start ns2jb first.');
- const found=[];
- for(const entry of fs.readdirSync(runsFolder,{withFileTypes:true})){
-  if(!entry.isDirectory()||!entry.name.startsWith('switch2-'))continue;
-  const run=path.join(runsFolder,entry.name),file=path.join(run,'result.json');
-  if(!fs.existsSync(file))continue;
-  let result;
-  try{result=json(file)}catch{continue}
-  if(!result.verified||result.rpc?.state!=='listening'||!Number.isFinite(Date.parse(result.started))||
-      Date.parse(result.started)<started)continue;
-  const currentFile=path.join(run,'switch2','fs-execution-current.json');
-  if(!fs.existsSync(currentFile))continue;
-  let current,proof;
-  try{
-   current=json(currentFile);
-   proof=json(current.file);
-  }catch{continue}
-  if(!current.verified||!proof.verified||proof.session!==entry.name)continue;
-  found.push(run);
- }
- check(found.length===1,found.length?
-   'More than one fresh verified session was found. Close extra ns2jb sessions and start again.':
-   'No active verified FS 4/4 session found. Wait for the first terminal to say 4/4 verified.');
- return found[0];
-}
 async function main(){
  const args=process.argv.slice(2);
- check(args.length===0||args.length===1&&args[0]==='--check'||
+ check(args.length===1&&args[0]==='--check'||
   args.length===2&&args[0]==='--run-dir'&&args[1]&&!args[1].startsWith('--'),
-  'Usage: node install.cjs [--check | --run-dir PATH]');
+  'Usage: node install.cjs --run-dir PATH\n       node install.cjs --check\nStart ns2jb separately and keep its verified FS 4/4 RPC host running.');
  const {modFolders,resources}=collectMods();
  console.log('\nMario Kart World mods:');
  for(const mod of modFolders)console.log('  '+mod.name+' ('+mod.files+' file(s))');
@@ -133,11 +97,11 @@ async function main(){
  process.env.NS2_WORKSPACE=root;
  checkPythonDependencies();
  checkNativeTools();
- const run=currentSession(args[0]==='--run-dir'?args[1]:undefined),session=path.basename(run);
+ const run=verifiedRun(path.resolve(args[1])),session=path.basename(run);
  const capture=path.join(mkw,'captures',session);
  check(!fs.existsSync(path.join(capture,'resident-install.json')),
   'This session already has a resident installation. Do not install twice; reboot before trying again.');
- console.log('\nUsing current ns2jb FS session automatically: '+session);
+ console.log('\nUsing existing ns2jb FS session: '+session);
  cmd(process.execPath,['research/superstars-mod/capture-fs.cjs',run]);
  cmd(process.execPath,['research/mkw-knockout-research/read-content.cjs',run,'--metadata-only']);
  const inv=json(path.join(capture,'mkw-inventory.json'));

@@ -7,7 +7,6 @@ venv/
 research/**/__pycache__/
 MarioKartWorld/mods/*
 !MarioKartWorld/mods/.gitkeep
-.ns2jb-start.json
 *.nca
 *.nso
 *.nro
