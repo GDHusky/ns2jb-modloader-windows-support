@@ -17,15 +17,12 @@ ns2jb-modloader/
 ├── contents/
 │   ├── 0400c3f00006e000/              # Mario Kart World
 │   │   └── romfs/
-│   │       ├── ...character mod files...
 │   │       └── System/
 │   │           └── GymlArchive/
 │   │               └── ...200cc files...
 │   └── ...other game's Title ID.../
 │       ├── romfs/
-│       │   └── ...mod files...
 │       └── exefs/
-│           └── ...replacement or additional modules...
 └── exefs_patches/                    # If included with the mod
     └── ...patch name.../
         └── <BUILD_ID>.ips
