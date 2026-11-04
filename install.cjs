@@ -47,15 +47,25 @@ async function main(argv=process.argv.slice(2)){
  try{
   console.log('Using ns2jb session '+session);
   const collection=o.sd?await require('./lib/sd-mods.cjs').collectSdMods(run,path.join(directory,'sd-inputs')):collectMods(root);describe(collection);
-  const {captureNative}=require('./lib/native-capture.cjs'),capture=await captureNative(run,directory);
+  const {captureOrCachedGame,cachedTitles}=require('./lib/game-cache.cjs'),cacheRoot=path.join(root,'state/game-cache');
   if(collection.patches.length&&!o.titles.length){
    const {attachGame}=require('./lib/game-files/session.cjs'),{discoverApplications}=require('./lib/game-files/content.cjs'),a=await attachGame(run);
    try{for(const app of await discoverApplications(a))if(!collection.games.some(g=>g.titleId===app.contentTitle))collection.games.push({titleId:app.contentTitle,romfs:[],exefs:[],patches:[],stubs:[],autoForGlobalPatches:true});}finally{await a.close();}
+   for(const id of cachedTitles(cacheRoot))if(!collection.games.some(g=>g.titleId===id))collection.games.push({titleId:id,romfs:[],exefs:[],patches:[],stubs:[],autoForGlobalPatches:true});
   }
-  const {captureGame}=require('./lib/content.cjs'),captures=[];
-  for(const g of collection.games){const dir=path.join(directory,'games',g.titleId);console.log('Inspecting '+g.titleId);try{captures.push({directory:dir,inventory:await captureGame(run,g,dir,collection.patches)});}catch(error){if(!g.autoForGlobalPatches||!error.captureCleanupComplete||!['CONTENT_UNAVAILABLE','CONTENT_LICENSE_UNAVAILABLE'].includes(error.code))throw error;g.unavailable=true;console.warn('WARNING: Could not inspect '+g.titleId+' for global IPS patches: '+error.message);}}
+  const captures=[],pendingGames=[];
+  for(const g of collection.games){
+   const dir=path.join(directory,'games',g.titleId);console.log('Inspecting '+g.titleId);
+   const entry=await captureOrCachedGame(run,g,dir,collection.patches,cacheRoot);
+   if(entry.pending){g.unavailable=true;pendingGames.push(entry);console.warn('PENDING '+g.titleId+': '+entry.reason);continue;}
+   captures.push(entry);if(entry.cached)console.log(g.titleId+': using saved preparation; mods will be ready when this game is available.');
+  }
   collection.games=collection.games.filter(g=>!g.unavailable);
+  writeJson(path.join(directory,'pending-games.json'),pendingGames);
+  if(!collection.games.length){update({status:'no-games-available',pendingGames});console.log('No mods loaded. Make a pending game available for its first preparation.');return;}
+  const {captureNative}=require('./lib/native-capture.cjs'),capture=await captureNative(run,directory);
   const {prepare}=require('./lib/prepare.cjs'),prepared=await prepare(collection,captures,path.join(directory,'prepared'),session);console.log('Prepared '+prepared.plan.views.length+' RomFS views and '+prepared.plan.exefs.length+' ExeFS modules');
+  prepared.plan.pendingGames=pendingGames;writeJson(path.join(directory,'prepared/overlay.json'),prepared.plan);
   warnIgnoredPatches(prepared.plan);
   const packVerification=await require('./lib/verify-plan.cjs').verifyPlan(prepared.plan,prepared.file);writeJson(path.join(directory,'prepared/verification.json'),packVerification);
   // Relocate the release-qualified templates and validate the actual layout.
@@ -67,7 +77,7 @@ async function main(argv=process.argv.slice(2)){
   if(o.keepRpc){update({status:'installed-rpc-held',titleIds:prepared.plan.titleIds});console.log('INSTALLED — RPC stays open. Stock RO restoration and game handoff have not run.');return;}
   const result=await require('./lib/native/handoff.cjs').apply(run,{residentDirectory:directory,contextMagic:'NS2LFS01'});check(result.stockRoProtocolVerified,'Stock RO verification failed');
   resident.stockRoRestored=true;resident.readyForGameHandoff=true;resident.handoff=result;writeJson(path.join(directory,'resident-install.json'),resident);
-  update({status:'ready',titleIds:prepared.plan.titleIds});console.log('READY — Stop your ns2jb host with Ctrl+C and wait for cleanup. Close SmileBASIC without rebooting, then open your game.');
+  update({status:'ready',titleIds:prepared.plan.titleIds,deferredGames:prepared.plan.deferredGames,pendingGames});console.log('READY — Stop your ns2jb host with Ctrl+C and wait for cleanup. Close SmileBASIC without rebooting, then open your game.');
  }catch(error){update({status:'stopped',error:error.message,inspectBeforeRetry:true});throw error;}
 }
 module.exports={main,options,verifiedRun,warnIgnoredPatches};

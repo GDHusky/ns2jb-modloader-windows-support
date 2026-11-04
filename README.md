@@ -53,6 +53,8 @@ node load.cjs
 
 The loader detects the active session and loads all mods from the SD. Wait for **READY**, then continue to step 3.
 
+Prepare each game once while it is installed or its cartridge is inserted. After that, its saved preparation can load mods while the game is absent; insert or reinstall the same game version before playing. Keep `ModLoader/state/` when updating the loader. Games with no usable preparation are listed as **PENDING** and do not block the others; they need their first preparation before their mods can load.
+
 ## 3. Open your games
 
 Once the installer says **READY**:
