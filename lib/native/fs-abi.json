@@ -1,0 +1,52 @@
+{
+  "schema": 1,
+  "captureSize": 2416640,
+  "ranges": [
+    {
+      "offset": 307200,
+      "size": 4096,
+      "sha256": "e918cb436c37a59d2982bbffaff38df5947e44be5656a489a01f1dcc655e6b69",
+      "purpose": "SD filesystem reference"
+    },
+    {
+      "offset": 430080,
+      "size": 4096,
+      "sha256": "c148156ead97bec8761d19c9ef2dbf81b253c052a27989cecbcefe668e879ef6",
+      "purpose": "context allocation"
+    },
+    {
+      "offset": 1060864,
+      "size": 4096,
+      "sha256": "6b3dd11c3b3e34b605a286ffa90c72b02048b90590cc6b0e8517b7f3979e5316",
+      "purpose": "source references"
+    },
+    {
+      "offset": 1064960,
+      "size": 4096,
+      "sha256": "1ef1bb56edff05a2f37e2011538d3395c6aa8bf0231b2e07b199c9a749ef4ae8",
+      "purpose": "file and namespace operations"
+    },
+    {
+      "offset": 1069056,
+      "size": 4096,
+      "sha256": "5c7f7e9adb7d5ff6f22278368e0a29d112ebb3cf63bf4b6a87b138b231acc254",
+      "purpose": "file size"
+    },
+    {
+      "offset": 1077248,
+      "size": 4096,
+      "sha256": "680f78e87a7b7d90c0ad7adbc1b1e31a107da6198a3bae474e0620cd0db61419",
+      "purpose": "RomFS operations"
+    },
+    {
+      "offset": 1179648,
+      "size": 4096,
+      "sha256": "e4ad62f8db2ec6d9397f4ffb23f908e3c9bc37b444a528a0ca3dcc7737c9c023",
+      "purpose": "native notifier"
+    }
+  ],
+  "padding": {
+    "offset": 2412800,
+    "size": 3840
+  }
+}

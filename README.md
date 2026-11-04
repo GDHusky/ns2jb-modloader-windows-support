@@ -68,7 +68,8 @@ Keep the microSD inserted. You can disconnect the PC and switch between modded g
 - **Formats:** RomFS replacements, new files/directories and `romfs.bin`; ExeFS files, `.stub`, `exefs.nsp` and IPS/IPS32 patches. Runtime cheats/plugins need a separate runtime.
 - **Session selection:** If automatic detection is unavailable, use `node load.cjs --run-dir "/path/to/ns2jb/runs/switch2-SESSION"`.
 - **Rebuilding from source:** `node tools/build.cjs` requires Zig 0.15.2. The release includes the built components; Python is only needed for the developer checks in `native/verify.py`.
-- **Cards:** Regular microSD tested on firmware 23.0.1. microSD Express uses the same filesystem interface but still needs hardware testing.
+- **Cards:** Regular microSD tested. microSD Express uses the same filesystem interface but still needs hardware testing.
+- **Firmware:** The loader checks the FS functions it uses rather than a firmware version number. An ns2jb FS 4/4 session is required.
 - **Sessions:** Install once per boot. After a failed native operation, reboot before trying again.
 
 Game assets, firmware, keys and mods are not included. [GPL-2.0](LICENSE).
