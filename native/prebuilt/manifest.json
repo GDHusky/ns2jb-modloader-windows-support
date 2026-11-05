@@ -3,19 +3,19 @@
   "zig": "0.15.2",
   "sources": {
     "native/romfs.c": "d4b7a9b061bca06a57664fea25dfb2f46de980588c912905ca55b5ce503816b2",
-    "native/namespace.c": "b16977fcdacf49734881469b3446d2f236a78bbeb004c9a66406fd3caab5c152",
+    "native/namespace.c": "41e92794cd90fdde4e828c9a35675746ad1acd5fd56155bcc6fb5fe7110d4b07",
     "native/diagnostics.c": "d4720625bc0653e36f6ec7773ff308cf8e4b15356669261fd4569283723e68e4",
     "native/inventory.c": "31975873bfa0d89789335afc4c7e3dc60437a4410b09fd7195ef7056a170bc90",
     "native/capture.c": "4fe84f9e663baf56669308e6b7aeb302435e5672ae669888e45046d278d86a83",
     "native/verify.c": "3b75f361e3e0b96496a810984a7892ff33666f4ff38925f88cde434073fd0912",
-    "native/lazy.c": "65d3f8680f41ab9414c15bd1fc348777330110c71924432c4fb1687d7da720fc",
+    "native/lazy.c": "baa0cf0510cb6645975bb4069f47fab9005fdacfcd0341008e96e639d87436ac",
     "native/lazy-romfs.c": "0eb9da6c9902a314c1a725575eab61acd2b6e15720541c9d533393b1a6ea5a06",
     "native/lazy-codefs.c": "9f0253c5d9d3c886b92b321959ac048aef657e07481b93ddd55445d0a73a206d",
     "native/lazy-nso.c": "2ab7388a55b186510408bf0a383c8416e52f9f90d4a7e79fd8cd29bd26d172d8",
     "native/minilibc.c": "bc252849bc0897e6c4371cae46a5233f785336eaa8b68678ed77ec23e95d55e4",
     "native/zbic-native.c": "c5ed7aefc496f583b297a6e48d7ab81937ec17f64a14b0ec9aa295abffd537c1",
     "native/namespace.S": "64061834b60499951aeaccdc636931f1224991ca854038f7fe895b445ce3da1c",
-    "native/namespace.h": "ebbaa7a72c0913191c755c794476839f066513e3af7b935b4a51863293754257",
+    "native/namespace.h": "2321106c2f7212629e5119cbfac2d858caa1dc76b0c897b45e28edb6885fc863",
     "native/lazy.h": "02e9c822d966399ef4243b1d938077178798d69e82945daac294af8a0b4b684e",
     "lib/native/call-source.cjs": "31fe1b652eda40208cc519e35d6a3b5b3683f1d30aa4a8e1529736d2488cfcfa",
     "native/vendor/zstd/zstd.inc": "4cd9bf41ead4f59b0380a5668b9b018010f5a7a893a2948e0ab84e1653a08b38",
@@ -26,7 +26,7 @@
     "native/vendor/freestanding/time.h": "c88d0d62cbec91922c054ac64cbc308412cf9304b51a2a3fb7b32d5f8b50be83"
   },
   "files": {
-    "templates.json": "87cd5ef1dfc13bb4f32fec6f8fdbef808b69114f6da79e5c87a98b110b371f03",
+    "templates.json": "ad16fcc340cea9e50903a528b0b4871e6074c9f8910af0b604025af8c8a343c8",
     "zbic.wasm": "332a0d964cdad308777f3c5d8732e2fa452a81858a008ec323a745ab7e4e763d"
   }
 }

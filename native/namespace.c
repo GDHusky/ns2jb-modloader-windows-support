@@ -158,6 +158,6 @@ uint64_t lfs_initialize(void){
  c->reserved2=0;
  if(c->log_file)((ns_ref_fn)(*(void ***)c->log_file)[0])(c->log_file);
  struct lfs_lazy_config *a=lfs_lazy_config();
- if(a&&c->log_file&&a->set_log_size(c->log_file,a->log_limit))a->log_failed=1;
+ if(a&&c->log_file&&a->set_log_size(c->log_file,a->log_cursor))a->log_failed=1;
  ((ns_ref_fn)(*(void ***)c->source_fs)[0])(c->source_fs);return 0;
 }

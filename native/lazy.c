@@ -125,11 +125,15 @@ void lfs_lazy_log(const char *event,uint64_t program,uint64_t value,uint32_t res
  if(path){length=lfs_text_length(path);if(length>0x300)length=0x300;row[n++]=' ';lfs_copy(row+n,path,length);n+=(unsigned)length;}row[n++]='\n';
  while(__atomic_exchange_n(&a->log_lock,1,__ATOMIC_ACQUIRE))lfs_pause();
  uint64_t budget=a->log_limit>4096?a->log_limit-4096:0;
+ int saved=0;
  if(result&&!a->reserved&&!a->log_failed){
   struct ns_buffer error={row,n};a->reserved=1;
-  if(c->write(c->log_file,budget,&error,n,0)||c->flush(c->log_file))a->log_failed=1;
+  if(write_log(a)){
+   if(a->log_cursor>a->log_limit||n>a->log_limit-a->log_cursor||c->write(c->log_file,a->log_cursor,&error,n,0)||c->flush(c->log_file))a->log_failed=1;
+   else{a->log_cursor+=n;saved=1;}
+  }
  }
- if(!a->log_failed&&a->log_cursor<=budget&&a->log_buffered<=budget-a->log_cursor&&n<=budget-a->log_cursor-a->log_buffered){
+ if(!saved&&!a->log_failed&&a->log_cursor<=budget&&a->log_buffered<=budget-a->log_cursor&&n<=budget-a->log_cursor-a->log_buffered){
   if(a->log_buffered+n>0x4000)write_log(a);
   if(!a->log_failed){lfs_copy(a->log_buffer+a->log_buffered,row,n);a->log_buffered+=n;}
  }

@@ -44,9 +44,12 @@ async function main(argv=process.argv.slice(2)){
  // The shared run lock also prevents installation from a second checkout.
  const lock=path.join(run,'ns2jb-modloader-install.json');fs.writeFileSync(lock,JSON.stringify({session,directory,started:new Date().toISOString(),status:'preparing'})+'\n',{flag:'wx',mode:0o600});
  const update=value=>writeJson(lock,{session,directory,...value});
- let collection,prepared,captureSession;const diagnostics=require('./lib/diagnostics.cjs'),reportPath=diagnostics.logPath(session);
+ let collection,prepared,captureSession;const diagnostics=require('./lib/diagnostics.cjs'),reportDate=new Date(),reportPath=diagnostics.logPath(session,reportDate);
  async function saveReport(plan,error){
-  try{const report=diagnostics.report({session,sdPath:reportPath,collection,plan,error,status:error?'stopped':'prepared'});await diagnostics.writeReport(run,report);return report;}
+  // A resident writer owns the normal report until reboot. Keep any later
+  // installation failure in a separate report rather than reopening that file.
+  const destination=error?diagnostics.logPath(session,new Date(Math.max(Date.now(),reportDate.getTime()+1000))):reportPath;
+  try{const report=diagnostics.report({session,sdPath:destination,collection,plan,error,status:error?'stopped':'prepared'});await diagnostics.writeReport(run,report);return report;}
   catch(error){console.warn('WARNING: Could not save the SD report: '+error.message);return null;}
  }
  try{

@@ -99,6 +99,8 @@ struct lfs_life {
 };
 _Static_assert(sizeof(struct lfs_view)==288,"RomFS view ABI");
 _Static_assert(sizeof(struct lfs_context)==368,"RomFS context ABI");
+_Static_assert(offsetof(struct lfs_context,log_ready)==272,"Report activation ABI");
+_Static_assert(offsetof(struct lfs_context,error_log)==280,"Report error ABI");
 _Static_assert(sizeof(struct lfs_life)==88,"Owned lifetime ABI");
 _Static_assert(sizeof(struct lfs_source)==48,"Source counter ABI");
 _Static_assert(sizeof(struct ns_file)==112,"CodeFS file ABI");
