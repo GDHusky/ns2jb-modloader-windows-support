@@ -43,6 +43,12 @@
       "size": 4096,
       "sha256": "e4ad62f8db2ec6d9397f4ffb23f908e3c9bc37b444a528a0ca3dcc7737c9c023",
       "purpose": "native notifier"
+    },
+    {
+      "offset": 2184736,
+      "size": 1088,
+      "sha256": "5d44ea06c3cc2eaeff833b8f77bb0da1d713c1c59fa2b58da6b38c73dd70f1a4",
+      "purpose": "owned native memory blocks"
     }
   ],
   "padding": {

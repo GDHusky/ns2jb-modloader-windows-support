@@ -73,6 +73,7 @@ Keep the microSD inserted. You can disconnect the PC and switch between modded g
 - **Cards:** Regular microSD tested. microSD Express uses the same filesystem interface but still needs hardware testing.
 - **Firmware:** The loader checks the FS functions it uses rather than a firmware version number. An ns2jb FS 4/4 session is required.
 - **Sessions:** Install once per boot. After a failed native operation, reboot before trying again.
+- **Logs:** If a mod does not work, send the contents of `SD:/ns2jb-modloader/logs/`. The loader keeps the last three reports, up to 1 MiB each.
 
 Game assets, firmware, keys and mods are not included. [GPL-2.0](LICENSE).
 

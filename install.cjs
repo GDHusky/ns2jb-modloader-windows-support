@@ -44,13 +44,17 @@ async function main(argv=process.argv.slice(2)){
  // The shared run lock also prevents installation from a second checkout.
  const lock=path.join(run,'ns2jb-modloader-install.json');fs.writeFileSync(lock,JSON.stringify({session,directory,started:new Date().toISOString(),status:'preparing'})+'\n',{flag:'wx',mode:0o600});
  const update=value=>writeJson(lock,{session,directory,...value});
- let collection;
+ let collection,captures=[];const diagnostics=require('./lib/diagnostics.cjs'),reportPath=diagnostics.logPath(session);
+ async function saveReport(plan,error){
+  try{const report=diagnostics.report({session,sdPath:reportPath,collection,captures,plan,error,status:error?'stopped':'prepared'});await diagnostics.writeReport(run,report);return report;}
+  catch(error){console.warn('WARNING: Could not save the SD report: '+error.message);return null;}
+ }
  try{
   console.log('Using ns2jb session '+session);
-  collection=o.sd?await require('./lib/sd-mods.cjs').collectSdMods(run,path.join(directory,'sd-inputs')):collectMods(root);describe(collection);
+  collection=o.sd?await require('./lib/sd-mods.cjs').collectSdMods(run,path.join(directory,'sd-inputs')):collectMods(root);describe(collection);await saveReport();
   const {captureOrCachedGame,cachedTitles}=require('./lib/game-cache.cjs'),cacheRoot=path.join(root,'state/game-cache');
   if(collection.patches.length&&!o.titles.length)for(const id of cachedTitles(cacheRoot,collection.patches))if(!collection.games.some(g=>g.titleId===id))collection.games.push({titleId:id,romfs:[],exefs:[],patches:[],stubs:[],autoForGlobalPatches:true});
-  const captures=[],pendingGames=[],attempted=new Set(),matched=new Set(),{matchesPatch}=require('./lib/exefs.cjs');
+  const pendingGames=[],attempted=new Set(),matched=new Set(),{matchesPatch}=require('./lib/exefs.cjs');
   async function inspect(g){
    attempted.add(g.titleId);const dir=path.join(directory,'games',g.titleId);console.log('Inspecting '+g.titleId);
    const entry=await captureOrCachedGame(run,g,dir,collection.patches,cacheRoot);
@@ -68,16 +72,16 @@ async function main(argv=process.argv.slice(2)){
   }
   collection.games=collection.games.filter(g=>!g.unavailable);
   writeJson(path.join(directory,'pending-games.json'),pendingGames);
-  if(!collection.games.length){update({status:'no-games-available',pendingGames});console.log('No mods loaded. Make a pending game available for its first preparation.');return;}
+  if(!collection.games.length){update({status:'no-games-available',pendingGames});await saveReport({views:[],exefs:[],sources:[],pendingGames});console.log('No mods loaded. Make a pending game available for its first preparation.');return;}
   const {prepare}=require('./lib/prepare.cjs'),prepared=await prepare(collection,captures,path.join(directory,'prepared'),session);console.log('Prepared '+prepared.plan.views.length+' RomFS views and '+prepared.plan.exefs.length+' ExeFS modules');
-  prepared.plan.pendingGames=pendingGames;writeJson(path.join(directory,'prepared/overlay.json'),prepared.plan);
+  prepared.plan.pendingGames=pendingGames;const report=await saveReport(prepared.plan);if(report)prepared.plan.diagnostics={...report,buffer:undefined,text:report.buffer.toString('utf8'),size:report.buffer.length};writeJson(path.join(directory,'prepared/overlay.json'),prepared.plan);
   warnIgnoredPatches(prepared.plan);
   const packVerification=await require('./lib/verify-plan.cjs').verifyPlan(prepared.plan,prepared.file);writeJson(path.join(directory,'prepared/verification.json'),packVerification);
   if(collection.reader){await collection.reader.close();collection.reader=null;}
   const {captureNative}=require('./lib/native-capture.cjs'),capture=await captureNative(run,directory);
   // Relocate the release-qualified templates and validate the actual layout.
   const {buildAll}=require('./lib/native.cjs');
-  const {buildContext}=require('./lib/context.cjs');const native=await buildAll(0x4000000000n,0x6000000000n,prepared.plan,{capture,directory:path.join(directory,'offline-build')});buildContext(prepared.plan,{filesystem:{object:0x6100001000n}},0x4000000000n,0x6000000000n,native,0,fs.readFileSync(prepared.file));
+  const {buildContext}=require('./lib/context.cjs');const native=await buildAll(0x4000000000n,0x6000000000n,prepared.plan,{capture,directory:path.join(directory,'offline-build')});buildContext(prepared.plan,{filesystem:{object:0x6100001000n},...(prepared.plan.diagnostics?{logFile:{object:0x6100002000n,write:0x4000105000n,flush:0x4000105300n}}:{})},0x4000000000n,0x6000000000n,native,0,fs.readFileSync(prepared.file));
   const {upload}=require('./lib/upload.cjs');await upload(run,prepared.plan,prepared.file,directory);
   update({status:'installing',titleIds:prepared.plan.titleIds});
   const resident=await require('./lib/resident.cjs').install(run,prepared.plan,directory,capture);check(resident.verified,'Native overlay verification failed');
@@ -85,7 +89,7 @@ async function main(argv=process.argv.slice(2)){
   const result=await require('./lib/native/handoff.cjs').apply(run,{residentDirectory:directory,contextMagic:'NS2LFS02'});check(result.stockRoProtocolVerified,'Stock RO verification failed');
   resident.stockRoRestored=true;resident.readyForGameHandoff=true;resident.handoff=result;writeJson(path.join(directory,'resident-install.json'),resident);
   update({status:'ready',titleIds:prepared.plan.titleIds,deferredGames:prepared.plan.deferredGames,pendingGames});console.log('READY — Stop your ns2jb host with Ctrl+C and wait for cleanup. Close SmileBASIC without rebooting, then open your game.');
- }catch(error){update({status:'stopped',error:error.message,inspectBeforeRetry:true});throw error;}
+ }catch(error){update({status:'stopped',error:error.message,inspectBeforeRetry:true});if(!/pending|timed out|disconnected/i.test(error.message)){if(collection?.reader){await collection.reader.close();collection.reader=null;}await saveReport(null,error);}throw error;}
  finally{if(collection?.reader)await collection.reader.close();}
 }
 module.exports={main,options,verifiedRun,warnIgnoredPatches};

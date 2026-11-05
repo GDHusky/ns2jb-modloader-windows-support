@@ -13,7 +13,7 @@ void lfs_zero(void *data,uint64_t n){
 }
 struct lfs_life *lfs_lookup(void *object,uint32_t kind){
  for(struct lfs_life *n=__atomic_load_n(&lfs_context()->objects,__ATOMIC_ACQUIRE);n;n=__atomic_load_n(&n->next,__ATOMIC_ACQUIRE))
-  if(n->object==object&&n->kind==kind&&__atomic_load_n(&n->active,__ATOMIC_ACQUIRE))return n;
+  if(__atomic_load_n(&n->active,__ATOMIC_ACQUIRE)==1&&__atomic_load_n(&n->object,__ATOMIC_RELAXED)==object&&__atomic_load_n(&n->kind,__ATOMIC_RELAXED)==kind)return n;
  return 0;
 }
 /* A retained reference keeps the SDK object alive while Release retires its
@@ -26,15 +26,12 @@ void lfs_release(void *object){
  if(__atomic_fetch_sub(&n->release_ops,1,__ATOMIC_ACQ_REL)==1&&
     __atomic_load_n((uint32_t *)((uint8_t *)object+n->ref_offset),__ATOMIC_ACQUIRE)==1){
   uint32_t active=1;
-  if(__atomic_compare_exchange_n(&n->active,&active,0,0,__ATOMIC_ACQ_REL,__ATOMIC_ACQUIRE)){
+  if(__atomic_compare_exchange_n(&n->active,&active,2,0,__ATOMIC_ACQ_REL,__ATOMIC_ACQUIRE)){
    struct lfs_context *c=lfs_context();
-   while(__atomic_exchange_n(&c->lock,1,__ATOMIC_ACQUIRE))__asm__ volatile("yield");
-   struct lfs_life **link=&c->objects,*current;
-   while((current=__atomic_load_n(link,__ATOMIC_ACQUIRE))&&current!=n)link=&current->next;
-   if(current)__atomic_store_n(link,__atomic_load_n(&n->next,__ATOMIC_RELAXED),__ATOMIC_RELEASE);
-   __atomic_store_n(&c->lock,0,__ATOMIC_RELEASE);
    __atomic_store_n((void ***)object,n->original,__ATOMIC_RELEASE);
    ((ns_ref_fn)n->original[1])(object);
+   __atomic_store_n(&n->active,0,__ATOMIC_RELEASE);
+   if(c->log_file&&!__atomic_load_n(&c->log_errors,__ATOMIC_RELAXED)&&__atomic_load_n(&c->revision,__ATOMIC_RELAXED)!=__atomic_load_n(&c->flushed_revision,__ATOMIC_RELAXED))lfs_flush();
   }
  }
 }
@@ -43,23 +40,25 @@ struct lfs_life *lfs_track(void *object,const void *owner,uint32_t kind){
  while(__atomic_exchange_n(&c->lock,1,__ATOMIC_ACQUIRE))__asm__ volatile("yield");
  struct lfs_life *n=lfs_lookup(object,kind);
  if(n){__atomic_store_n(&c->lock,0,__ATOMIC_RELEASE);return n;}
- n=c->allocate(sizeof(*n));
+ for(n=__atomic_load_n(&c->objects,__ATOMIC_ACQUIRE);n;n=n->next)if(!__atomic_load_n(&n->active,__ATOMIC_ACQUIRE))break;
+ int fresh=!n;
+ if(fresh)n=c->allocate(sizeof(*n));
  if(!n){__atomic_store_n(&c->lock,0,__ATOMIC_RELEASE);return 0;}
- lfs_zero(n,sizeof(*n));
- n->object=object;n->original=*(void ***)object;n->owner=owner;n->kind=kind;
+ if(fresh)lfs_zero(n,sizeof(*n));
+ __atomic_store_n(&n->object,object,__ATOMIC_RELAXED);n->original=*(void ***)object;n->owner=owner;__atomic_store_n(&n->kind,kind,__ATOMIC_RELAXED);n->release_ops=0;n->cursor=n->mode=0;
  uint32_t before[16],after[16],offset=0,candidates=0;
  for(unsigned i=0;i<16;i++)before[i]=__atomic_load_n((uint32_t *)object+i,__ATOMIC_RELAXED);
  ((ns_ref_fn)n->original[0])(object);
  for(unsigned i=0;i<16;i++)after[i]=__atomic_load_n((uint32_t *)object+i,__ATOMIC_RELAXED);
  for(unsigned i=2;i<16;i++)if(before[i]&&before[i]<0x100000&&after[i]==before[i]+1){offset=i*4;candidates++;}
  if(candidates!=1){
-  ((ns_ref_fn)n->original[1])(object);c->free(n,sizeof(*n));n=0;
+  ((ns_ref_fn)n->original[1])(object);if(fresh)c->free(n,sizeof(*n));n=0;
  }else{
-  n->ref_offset=offset;n->active=1;
+  n->ref_offset=offset;
   for(unsigned i=0;i<16;i++)n->table[i]=n->original[i];
   n->table[1]=(void *)lfs_release;
-  n->next=__atomic_load_n(&c->objects,__ATOMIC_RELAXED);
-  __atomic_store_n(&c->objects,n,__ATOMIC_RELEASE);
+  if(fresh){n->next=__atomic_load_n(&c->objects,__ATOMIC_RELAXED);__atomic_store_n(&c->objects,n,__ATOMIC_RELEASE);}
+  __atomic_store_n(&n->active,1,__ATOMIC_RELEASE);
   __atomic_store_n((void ***)object,n->table,__ATOMIC_RELEASE);
  }
  __atomic_store_n(&c->lock,0,__ATOMIC_RELEASE);return n;
@@ -73,25 +72,35 @@ uint32_t lfs_source_read(const char *path,uint64_t offset,void *data,uint64_t si
  }
  if(path){
   struct ns_out out={&file};file=0;
-  result=c->open_file((uint8_t *)c->source_fs+8,&out,path,1);
-  if(result)return result;
+  result=c->open_file((uint8_t *)c->source_fs+8,&out,((const struct lfs_source *)path)->path,1);
+  if(result){lfs_note((struct lfs_source *)path,0,result);return result;}
   if(!file)return 0xd401;
  }
  struct ns_buffer buffer={data,size};uint64_t read=0;
  result=c->read(file,&read,(int64_t)offset,&buffer,(int64_t)size,0);
  ((ns_ref_fn)(*(void ***)file)[1])(file);
  add(&c->source_reads,1);
- return result?result:(read==size?0:0xd401);
+ result=result?result:(read==size?0:0xd401);lfs_note((struct lfs_source *)path,result?0:read,result);return result;
+}
+static void identity_mismatch(uint64_t stage){
+ struct lfs_context *c=lfs_context();uint64_t empty=0;
+ if(c->log_file&&!__atomic_load_n(&c->log_errors,__ATOMIC_RELAXED)&&__atomic_compare_exchange_n(&c->reserved2,&empty,stage,0,__ATOMIC_RELAXED,__ATOMIC_RELAXED)){
+  __atomic_store_n(&c->identity_mismatches,1,__ATOMIC_RELAXED);__atomic_fetch_add(&c->revision,1,__ATOMIC_RELEASE);
+ }
 }
 static const struct lfs_view *identify(void *object,uint64_t size){
  struct lfs_context *c=lfs_context();uint8_t bytes[128];
  for(uint32_t i=0;i<c->count;i++){
   const struct lfs_view *v=&c->views[i];if(v->original_size!=size)continue;
   struct ns_buffer buffer={bytes,sizeof(bytes)};
-  if(c->original_read((uint8_t *)object+8,0,&buffer,80)||!lfs_equal(bytes,v->header,80))continue;
-  if(c->original_read((uint8_t *)object+8,v->entry_offset,&buffer,32)||!lfs_equal(bytes,v->entry,32))continue;
-  if(c->original_read((uint8_t *)object+8,v->prefix_offset,&buffer,v->prefix_length)||!lfs_equal(bytes,v->prefix,v->prefix_length))continue;
+  if(c->original_read((uint8_t *)object+8,0,&buffer,80)||!lfs_equal(bytes,v->header,80)){identity_mismatch(1);continue;}
+  if(c->original_read((uint8_t *)object+8,v->entry_offset,&buffer,32)||!lfs_equal(bytes,v->entry,32)){identity_mismatch(2);continue;}
+  if(c->original_read((uint8_t *)object+8,v->prefix_offset,&buffer,v->prefix_length)||!lfs_equal(bytes,v->prefix,v->prefix_length)){identity_mismatch(3);continue;}
   lfs_track(object,v,LFS_STORAGE);return v;
+ }
+ if(c->log_file&&!__atomic_load_n(&c->log_errors,__ATOMIC_RELAXED)&&!__atomic_load_n(&c->unmatched_count,__ATOMIC_RELAXED)&&size>=80){
+  struct ns_buffer b={bytes,sizeof(bytes)};
+  if(!c->original_read((uint8_t *)object+8,0,&b,80)&&*(uint64_t *)bytes==80){uint64_t empty=0;if(__atomic_compare_exchange_n(&c->unmatched_count,&empty,1,0,__ATOMIC_RELAXED,__ATOMIC_RELAXED)){c->unmatched_size=size;__atomic_fetch_add(&c->revision,1,__ATOMIC_RELEASE);}lfs_track(object,0,LFS_STORAGE);}
  }
  return 0;
 }
@@ -139,6 +148,7 @@ uint32_t lfs_read(void *object,int64_t at,const struct ns_buffer *buffer,int64_t
  }
  result=0;
 redirected:
+ lfs_note(&c->view_stats[v-c->views],result?0:(uint64_t)length,result);
  if(result)add(&c->errors,1);
  goto finish;
 original:

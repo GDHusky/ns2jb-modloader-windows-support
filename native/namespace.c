@@ -49,11 +49,11 @@ static uint32_t slice_read(void *object,uint64_t *read,int64_t offset,const stru
    struct ns_buffer b={(uint8_t *)buffer->data+start-(uint64_t)offset,stop-start};uint32_t result;
    if(s->source_path)result=lfs_source_read(s->source_path,s->source_offset+start-s->offset,b.data,b.capacity);
    else{uint64_t count=0;result=((ns_read_fn)n->original[4])(object,&count,file->offset+s->source_offset+start-s->offset,&b,b.capacity,option);if(!result&&count!=b.capacity)result=0xd401;}
-   if(result)return result;done+=b.capacity;
+   if(result){lfs_note((struct lfs_source *)&file->observation,0,result);return result;}done+=b.capacity;
   }
-  *read=done;return done==amount?0:0xd401;
+  *read=done;uint32_t result=done==amount?0:0xd401;lfs_note((struct lfs_source *)&file->observation,result?0:done,result);return result;
  }
- return ((ns_read_fn)n->original[4])(object,read,(uint64_t)offset+file->offset,buffer,amount,option);
+ uint32_t result=((ns_read_fn)n->original[4])(object,read,(uint64_t)offset+file->offset,buffer,amount,option);lfs_note((struct lfs_source *)&file->observation,result?0:*read,result);return result;
 }
 static uint32_t slice_size(void *object,uint64_t *size){
  struct lfs_life *n=lfs_lookup(object,LFS_SLICE);if(!n)return 0xd401;
@@ -87,8 +87,8 @@ uint32_t lfs_namespace_open(void *fs,struct ns_out *out,const char *path,uint32_
  if(!file||!file->flags)result=c->open_file(fs,out,path,mode);
  else if(file->flags&2){add(&c->matched,1);result=0x202;}
  else{
-  add(&c->matched,1);result=file->source_path?c->open_file(c->source_fs,out,file->source_path,mode):c->open_file(fs,out,path,mode);
-  if(!result&&(file->count||file->offset||file->size!=file->source_size)){
+  add(&c->matched,1);result=file->source_path?c->open_file(c->source_fs,out,((const struct lfs_source *)file->source_path)->path,mode):c->open_file(fs,out,path,mode);
+  if(!result&&(file->source_path||file->count||file->offset||file->size!=file->source_size)){
    void *object=*out->value;struct lfs_life *n=lfs_track(object,file,LFS_SLICE);
    if(!n){c->release(object);*out->value=0;result=0xd401;}
    else{
@@ -98,7 +98,7 @@ uint32_t lfs_namespace_open(void *fs,struct ns_out *out,const char *path,uint32_
     else n->table[slot]=(void *)slice_size;
    }
   }
-  if(result)add(&c->errors,1);
+  if(result){add(&c->errors,1);lfs_note((struct lfs_source *)&file->observation,0,result);}
  }
  add(&c->active,-1);return result;
 }
@@ -124,5 +124,7 @@ uint32_t lfs_namespace_type(void *fs,uint32_t *out,const char *path,struct ns_co
 }
 uint64_t lfs_initialize(void){
  struct lfs_context *c=lfs_context();
+ c->reserved2=0;
+ if(c->log_file)((ns_ref_fn)(*(void ***)c->log_file)[0])(c->log_file);
  ((ns_ref_fn)(*(void ***)c->source_fs)[0])(c->source_fs);return 0;
 }

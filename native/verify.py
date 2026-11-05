@@ -5,11 +5,11 @@ import unicorn.arm64_const as R
 from capstone import Cs,CS_ARCH_ARM64,CS_MODE_LITTLE_ENDIAN
 import argparse,subprocess,hashlib
 parser=argparse.ArgumentParser(description="Qualify compiled ARM64 readers with modeled SDK objects and source data.")
-parser.add_argument('plan',type=Path);parser.add_argument('build',type=Path);args=parser.parse_args()
+parser.add_argument('plan',type=Path);parser.add_argument('build',type=Path);parser.add_argument('--diagnostics',action='store_true');args=parser.parse_args()
 D=args.build.resolve().parent
 plan=json.loads(args.plan.read_text());layout=json.loads((args.build/'combined-layout.json').read_text());payload=(args.plan.parent/plan['payload']['filename']).read_bytes()
-bootstrap="""const fs=require('node:fs');const {buildContext}=require('./lib/context.cjs');const p=JSON.parse(fs.readFileSync(process.argv[1])),n=JSON.parse(fs.readFileSync(process.argv[2]));process.stdout.write(buildContext(p,{filesystem:{object:0x5200000200n}},BigInt(n.base),BigInt(n.address),n,1,fs.readFileSync(process.argv[3])).toString('hex'));"""
-context=bytes.fromhex(subprocess.check_output(['node','-e',bootstrap,str(args.plan.resolve()),str((args.build/'combined-layout.json').resolve()),str((args.plan.parent/plan['payload']['filename']).resolve())],cwd=Path(__file__).resolve().parent.parent).decode())
+bootstrap="""const fs=require('node:fs');const {buildContext}=require('./lib/context.cjs');const p=JSON.parse(fs.readFileSync(process.argv[1])),n=JSON.parse(fs.readFileSync(process.argv[2]));if(process.argv[4]==='true'){const d=require('./lib/diagnostics.cjs'),r=d.report({session:'switch2-nativeqa',sdPath:d.logPath('switch2-nativeqa'),plan:p});p.diagnostics={...r,buffer:undefined,text:r.buffer.toString(),size:r.buffer.length};}else delete p.diagnostics;process.stdout.write(buildContext(p,{filesystem:{object:0x5200000200n},...(p.diagnostics?{logFile:{object:0x5200000400n,write:BigInt(n.base)+0x105000n,flush:BigInt(n.base)+0x105300n}}:{})},BigInt(n.base),BigInt(n.address),n,1,fs.readFileSync(process.argv[3])).toString('hex'));"""
+context=bytes.fromhex(subprocess.check_output(['node','-e',bootstrap,str(args.plan.resolve()),str((args.build/'combined-layout.json').resolve()),str((args.plan.parent/plan['payload']['filename']).resolve()),str(args.diagnostics).lower()],cwd=Path(__file__).resolve().parent.parent).decode())
 code=(args.build/'runtime.bin').read_bytes();gateway=(args.build/'combined.bin').read_bytes()
 assert hashlib.sha256(code).hexdigest()==layout['runtimeSha256'] and hashlib.sha256(gateway).hexdigest()==layout['sha256']
 BASE=int(layout['base']);CTX=int(layout['address']);RUNTIME=int(layout['runtimeAddress']);STACK=0x5000000000;ARGS=0x5100000000;OUTPUT=ARGS+0x4000;OBJ=0x5200000000;HEAP=0x5300000000;RETURN=0x5400000000
@@ -21,12 +21,14 @@ def reg(name):return getattr(R,'UC_ARM64_REG_'+name.upper())
 class Model:
  def __init__(self,view=None,matches=True,ref_offset=32):
   self.uc=Uc(UC_ARCH_ARM64,UC_MODE_ARM);self.view=view;self.matches=matches;self.ref_offset=ref_offset;self.next_obj=OBJ+0x10000;self.next_heap=HEAP;self.objects={};self.regions=[];self.trace=[];self.source_error=0;self.original_error=0;self.short=False;self.alloc_fail=False;self.freed=[];self.steps=0
+  self.report=None;self.log_write_error=0;self.log_flush_error=0;self.log_writes=0;self.log_flushes=0;self.logger_calls=0
   for at,size in [(BASE+0x240000,0x10000),(RUNTIME,len(code)),(CTX,(len(context)+4095)&~4095),(STACK,0x20000),(ARGS,0x210000),(OBJ,0x200000),(HEAP,0x200000),(RETURN,4096),(BASE+0x69000,4096),(BASE+0x4b000,4096),(BASE+0x103000,0x5000),(BASE+0x150000,4096)]:self.uc.mem_map(at,size)
   self.uc.mem_write(RUNTIME,code);self.uc.mem_write(BASE+0x24d100,gateway);self.uc.mem_write(CTX,context)
   self.file_table=OBJ+0x1000;self.fs_table=OBJ+0x2000;self.dir_table=OBJ+0x3000
   for vt,kind in [(self.file_table,'file'),(self.fs_table,'fs'),(self.dir_table,'dir')]:
    slots=[BASE+0x150000]*16;slots[0]=BASE+(0x4b8c0 if kind=='fs' else 0x1036f0);slots[1]=BASE+(0x103390 if kind=='fs' else 0x104e10);slots[4]=BASE+(0x150100 if kind=='dir' else 0x104ef0);slots[5]=BASE+0x150200;slots[8]=BASE+0x105480;self.uc.mem_write(vt,b''.join(pack(v)for v in slots))
   self.source=self.object('fs',address=OBJ+0x200,sd=True,ref=1,ref_offset=40)
+  self.log_file=self.object('file',address=OBJ+0x400,size=q(context,192))
   if view:
    self.storage=self.object('storage',ref_offset=ref_offset)
    metadata=view.get('originalMetadata')
@@ -65,6 +67,14 @@ class Model:
   if pc==RETURN:uc.emu_stop();return
   self.steps+=1
   a=[uc.reg_read(reg('x'+str(i)))for i in range(6)]
+  if pc in[RUNTIME+layout['offsets']['lfs_observe'],RUNTIME+layout['offsets']['lfs_flush']]:self.logger_calls+=1
+  if pc==BASE+0x105000:
+   obj,offset,pair,n,option=a[:5];assert obj==self.log_file and offset==0 and option==0;ptr,cap=struct.unpack('<QQ',uc.mem_read(pair,16));assert n==cap==q(context,192) and n<=1024*1024
+   self.log_writes+=1
+   if not self.log_write_error:self.report=bytes(uc.mem_read(ptr,n))
+   self.ret(self.log_write_error);return
+  if pc==BASE+0x105300:
+   assert a[0]==self.log_file;self.log_flushes+=1;self.ret(self.log_flush_error);return
   if pc==BASE+0x694c0:
    if self.alloc_fail:self.ret(0);return
    ptr=self.next_heap;self.next_heap+=(a[0]+15)&~15;assert self.next_heap<HEAP+0x200000;self.ret(ptr);return
@@ -224,4 +234,22 @@ for group in plan['namespaces']:
   for j in range(count):
    row=bytes(m.uc.mem_read(OUTPUT+j*0x310,0x310));name=row[:0x301].split(b'\0')[0].decode();actual[name]=q(row,0x308);assert row[0x304]==1
  assert actual==wanted,(actual,wanted);m.release(directory);m.release(fs);assert m.objects[directory]['dead']and m.objects[fs]['dead'];passed+=1
+if plan['views']:
+ view=next(v for v in plan['views']if any(s.get('sourcePath')for s in v['segments']));segment=next(s for s in view['segments']if s.get('sourcePath'));offset=segment['offset'];m=Model(view)
+ for _ in range(2000):
+  result,data=m.read(offset,1);assert not result and data==m.expected(offset,1);m.release(m.storage);m.object('storage',address=m.storage)
+ assert m.next_heap-HEAP<256,('object tracking grew with repeated opens',m.next_heap-HEAP);passed+=1
+ if args.diagnostics:
+  m=Model(view);assert m.invoke(RUNTIME+layout['offsets']['lfs_game_observations'],[])==0;assert m.log_writes==m.log_flushes==1
+  result,data=m.read(offset,1);assert not result;assert m.log_writes==1
+  m.release(m.storage);assert m.log_writes==2;seen=m.logger_calls
+  for _ in range(2000):
+   m.object('storage',address=m.storage);result,data=m.read(offset,1);assert not result;m.release(m.storage)
+  assert m.log_writes==2 and m.logger_calls==seen,('logger kept running after first observation',m.log_writes,m.logger_calls,seen);passed+=1
+  for failure in ['write','flush']:
+   m=Model(view);setattr(m,'log_'+failure+'_error',0x202);m.invoke(RUNTIME+layout['offsets']['lfs_game_observations'],[]);assert m.u64(CTX+256)==1
+   for _ in range(100):
+    result,data=m.read(offset,1);assert not result and data==m.expected(offset,1);m.release(m.storage);m.object('storage',address=m.storage)
+   assert m.log_writes==1 and m.log_flushes==int(failure=='flush');passed+=1
+  m=Model(view);m.invoke(RUNTIME+layout['offsets']['lfs_game_observations'],[]);m.source_error=0x1234;result,_=m.read(offset,1);assert result==0x1234 and m.log_writes==2;m.release(m.storage);first=m.report.split(b'First source error (native result and SD path):\n')[1].split(b'\n')[0];assert b'00001234' in first and segment['sourcePath'].encode()in first;passed+=1
 print(json.dumps({'nativeCases':passed,'compiledCodeBytes':len(code),'directSdReads':True,'originalMetadataAliases':True,'ipsDeltaReads':True,'objectAddressReuse':True,'referenceOffsets':[24,32,40],'unmodifiedExeFsPassedThrough':True,'directoryUnion':True,'x18AndCalleeSavedPreserved':True,'sourceDataSdkAndPacModeled':True}))
