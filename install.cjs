@@ -58,7 +58,8 @@ async function main(argv=process.argv.slice(2)){
   const pendingGames=[],attempted=new Set(),matched=new Set(),{matchesPatch}=require('./lib/exefs.cjs');
   async function inspect(g){
    attempted.add(g.titleId);const dir=path.join(directory,'games',g.titleId);console.log('Inspecting '+g.titleId);
-   const entry=await captureOrCachedGame(run,g,dir,collection.patches,cacheRoot);
+   const captureGame=(...args)=>require('./lib/content.cjs').captureGame(...args,collection.bootstrap);
+   const entry=await captureOrCachedGame(run,g,dir,collection.patches,cacheRoot,captureGame);
    if(entry.pending){g.unavailable=true;pendingGames.push(entry);console.warn('PENDING '+g.titleId+': '+entry.reason);return;}
    captures.push(entry);if(entry.deferred)console.log(g.titleId+': using saved preparation; mods will be ready when this game is available.');
    for(const row of (entry.inventory.exefs||entry.inventory.exefsIndex)?.files||[])if(row.buildId)for(const patch of collection.patches)if(matchesPatch(patch,row.name,row.buildId))matched.add(patch.file);
@@ -90,7 +91,7 @@ async function main(argv=process.argv.slice(2)){
   resident.stockRoRestored=true;resident.readyForGameHandoff=true;resident.handoff=result;writeJson(path.join(directory,'resident-install.json'),resident);
   update({status:'ready',titleIds:prepared.plan.titleIds,deferredGames:prepared.plan.deferredGames,pendingGames});console.log('READY — Stop your ns2jb host with Ctrl+C and wait for cleanup. Close SmileBASIC without rebooting, then open your game.');
  }catch(error){update({status:'stopped',error:error.message,inspectBeforeRetry:true});if(!/pending|timed out|disconnected/i.test(error.message)){if(collection?.reader){await collection.reader.close();collection.reader=null;}await saveReport(null,error);}throw error;}
- finally{if(collection?.reader)await collection.reader.close();if(collection?.bootstrap&&!collection.bootstrap.transferred)await collection.bootstrap.release();}
+ finally{if(!collection?.bootstrap?.bridge.c.pending){if(collection?.reader)await collection.reader.close();if(collection?.bootstrap&&!collection.bootstrap.transferred)await collection.bootstrap.release();}}
 }
 module.exports={main,options,verifiedRun,warnIgnoredPatches};
 if(require.main===module)main().catch(error=>{console.error('INSTALL STOPPED: '+error.message);process.exitCode=1;});
