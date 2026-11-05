@@ -82,11 +82,23 @@ uint32_t lfs_source_read(const char *path,uint64_t offset,void *data,uint64_t si
   if(result){lfs_note((struct lfs_source *)path,0,result);return result;}
   if(!file)return 0xd401;
  }
- struct ns_buffer buffer={data,size};uint64_t read=0;
- result=c->read(file,&read,(int64_t)offset,&buffer,(int64_t)size,0);
+ result=lfs_source_read_file(file,(struct lfs_source *)path,offset,data,size);
  c->sdk.file_release(file);
+ return result;
+}
+uint32_t lfs_source_read_file(void *file,struct lfs_source *source,uint64_t offset,void *data,uint64_t size){
+ struct lfs_context *c=lfs_context();struct ns_buffer buffer={data,size};uint64_t read=0;
+ uint32_t result=c->read(file,&read,(int64_t)offset,&buffer,(int64_t)size,0);
  add(&c->source_reads,1);
- result=result?result:(read==size?0:0xd401);lfs_note((struct lfs_source *)path,result?0:read,result);return result;
+ result=result?result:(read==size?0:0xd401);
+ if(!result&&read&&lfs_lazy_config()&&c->log_file&&!__atomic_exchange_n(&source->reads,1,__ATOMIC_ACQ_REL)){
+  uint64_t fingerprint=UINT64_C(14695981039346656037),sample=read<64?read:64;
+  for(uint64_t i=0;i<sample;i++){fingerprint^=((const uint8_t *)data)[i];fingerprint*=UINT64_C(1099511628211);}
+  lfs_lazy_log("Source first read",0,read,0,source->path);
+  lfs_lazy_log("Source offset",0,offset,0,source->path);
+  lfs_lazy_log("Source sample FNV64",0,fingerprint,0,source->path);
+ }else lfs_note(source,result?0:read,result);
+ return result;
 }
 static void identity_mismatch(uint64_t stage){
  struct lfs_context *c=lfs_context();uint64_t empty=0;
@@ -112,6 +124,7 @@ static const struct lfs_view *identify(void *object,uint64_t size){
 }
 static uint32_t read_segment(void *object,const struct lfs_segment *s,uint64_t offset,void *data,uint64_t size){
  if((uintptr_t)s->source_path==2){struct ns_buffer b={data,size};return lfs_context()->original_read((uint8_t *)object+8,s->source_offset+offset,&b,size);}
+ if((uintptr_t)s->source_path>2){struct lfs_life *life=lfs_lookup(object,LFS_STORAGE);if(life&&life->plan_owner)return lfs_lazy_source_read(life->plan_owner,(struct lfs_source *)s->source_path,s->source_offset+offset,data,size);}
  return lfs_source_read(s->source_path,s->source_offset+offset,data,size);
 }
 uint32_t lfs_size(void *object,uint64_t *size){

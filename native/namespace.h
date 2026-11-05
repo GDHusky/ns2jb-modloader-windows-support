@@ -120,6 +120,7 @@ static inline void lfs_note(struct lfs_source *source,uint64_t bytes,uint32_t re
 int lfs_equal(const void *,const void *,uint64_t);
 void lfs_zero(void *,uint64_t);
 uint32_t lfs_source_read(const char *,uint64_t,void *,uint64_t);
+uint32_t lfs_source_read_file(void *,struct lfs_source *,uint64_t,void *,uint64_t);
 uint32_t lfs_read(void *,int64_t,const struct ns_buffer *,int64_t);
 uint32_t lfs_size(void *,uint64_t *);
 uint32_t lfs_namespace_open(void *,struct ns_out *,const char *,uint32_t,struct ns_context *);

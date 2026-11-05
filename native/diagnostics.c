@@ -76,3 +76,9 @@ uint64_t lfs_game_observations(void){
  if(c->log_ready)*c->log_ready='1';
  __atomic_fetch_add(&c->revision,1,__ATOMIC_RELEASE);lfs_flush();return 0;
 }
+uint64_t lfs_activate(void){
+ struct lfs_context *c=lfs_context();
+ if(c->codefs)__atomic_store_n(&c->codefs->enabled,1,__ATOMIC_RELEASE);
+ __atomic_store_n(&c->enabled,1,__ATOMIC_RELEASE);
+ return lfs_game_observations();
+}

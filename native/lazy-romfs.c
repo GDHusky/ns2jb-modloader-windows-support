@@ -176,12 +176,12 @@ static uint32_t add_image(struct builder *b,const struct lfs_lazy_file *file){
  return 0;
 }
 static uint32_t attach_storage(void *storage,uint64_t program){
- const struct lfs_lazy_game *game=lfs_lazy_game(program);if(!game||lfs_lookup(storage,LFS_STORAGE))return 0;
+ const struct lfs_lazy_game *game=lfs_lazy_game(program);if(!game){lfs_lazy_unconfigured(program,1);return 0;}if(lfs_lookup(storage,LFS_STORAGE))return 0;
  uint64_t relevant=0;for(uint64_t i=0;i<game->count;i++)if(game->files[i].kind<=LAZY_ROMFS||game->files[i].kind==LAZY_ROMFS_IMAGE)relevant++;
  if(!relevant)return 0;
  struct builder b={.original={.storage=storage},.slots=16};
- uint32_t result=lfs_context()->original_size(storage,&b.original.size);if(result)return result;
- result=input_header(&b.original);if(result)return result;
+ uint32_t result=lfs_context()->original_size(storage,&b.original.size);if(result){lfs_lazy_log("RomFS original size",program,0,result,0);lfs_lazy_log_flush();return result;}
+ result=input_header(&b.original);if(result){lfs_lazy_log("RomFS original header",program,b.original.size,result,0);lfs_lazy_log_flush();return result;}
  while(b.slots<game->count*2){if(b.slots>UINT64_MAX/2)return 0xd401;b.slots*=2;}
  b.nodes=take(&b,b.slots*sizeof(*b.nodes));b.buckets=take(&b,b.slots*sizeof(*b.buckets));
  struct lfs_view *view=lfs_lazy_plan_allocate(&b.arena,sizeof(*view));if(!view)b.error=0xd401;

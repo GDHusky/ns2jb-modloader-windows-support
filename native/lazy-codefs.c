@@ -45,7 +45,11 @@ static const struct ns_group *codefs(void *filesystem,struct ns_context *c){
  const struct lfs_lazy_game *game=program?lfs_lazy_game(program):0;
  struct lfs_lazy_config *config=lfs_lazy_config();uint64_t changes=0;
  if(game)for(uint64_t i=0;i<game->count;i++)if(game->files[i].kind==LAZY_EXEFS||game->files[i].kind==LAZY_STUB||game->files[i].kind==LAZY_EXEFS_IMAGE)changes++;
- if(!program||(!changes&&!config->patch_count)){lfs_track((uint8_t *)filesystem-8,0,LFS_CODEFS);return 0;}
+ if(!program||(!changes&&!config->patch_count)){
+  if(!program&&(result&0x3fffff)!=0x202){lfs_lazy_log("ExeFS identity unavailable",0,0,result?result:0xd401,"/main.npdm");lfs_lazy_log_flush();}
+  else if(!game)lfs_lazy_unconfigured(program,2);
+  lfs_track((uint8_t *)filesystem-8,0,LFS_CODEFS);return 0;
+ }
  struct lfs_arena *arena=0;struct item *items=0;void *directory=0;struct ns_out directory_out={&directory};
  result=c->open_directory(filesystem,&directory_out,"/",2);
  if(!result&&!directory)result=0xd401;

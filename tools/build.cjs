@@ -14,6 +14,7 @@ function assemble(name,source){
 }
 for(let i=0;i<=6;i++)assemble('call'+i,callSource(i));
 assemble('publish',callSource(2,true));
+assemble('allocate',callSource(1,false,true));
 const linker=path.join(work,'runtime.ld'),elfFile=path.join(work,'runtime.elf'),objects=[];
 fs.writeFileSync(linker,'ENTRY(lfs_read_entry)\nSECTIONS { . = 0; .text : { KEEP(*(.text)) *(.text*) *(.rodata*) } /DISCARD/ : { *(.comment) *(.note*) *(.eh_frame*) } }\n');
 const nativeSources=['romfs.c','namespace.c','diagnostics.c','inventory.c','capture.c','verify.c','lazy.c','lazy-romfs.c','lazy-codefs.c','lazy-nso.c','minilibc.c','zbic-native.c','namespace.S'];

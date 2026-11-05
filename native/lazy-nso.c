@@ -128,6 +128,7 @@ uint32_t lfs_lazy_patch_file(void *object,struct lfs_life *life,const struct ns_
  /* Build ID is recorded even when every supplied patch belongs to another
   * game version. This makes an inactive patch visible in the normal report. */
  char build[65];static const char hex[]="0123456789abcdef";for(unsigned i=0;i<32;i++){build[i*2]=hex[header[0x40+i]>>4];build[i*2+1]=hex[header[0x40+i]&15];}build[64]=0;
+ lfs_lazy_log("NSO file",owner?owner->program_id:0,file->size,0,file->name);
  lfs_lazy_log("NSO Build ID",owner?owner->program_id:0,matches,0,build);
  if(!matches){lfs_lazy_log_flush();return 0;}
  struct lfs_arena *arena=0;struct nso *n=lfs_arena_allocate(&arena,sizeof(*n));if(!n){lfs_arena_free(arena);return 0xd401;}
@@ -136,7 +137,7 @@ uint32_t lfs_lazy_patch_file(void *object,struct lfs_life *life,const struct ns_
   result=parse(n,&config->patches[i]);lfs_lazy_log("IPS matched",owner?owner->program_id:0,config->patches[i].size,result,config->patches[i].source.path);
  }
  if(!result)result=initialize(n);
- if(!result)life->stream=n;else lfs_arena_free(n->arena);
+ if(!result)life->stream=n;else{lfs_lazy_log("IPS preparation error",owner?owner->program_id:0,file->size,result,file->name);lfs_arena_free(n->arena);}
  lfs_lazy_log_flush();return result;
 }
 static uint32_t next_byte(struct nso *n,uint8_t *value){

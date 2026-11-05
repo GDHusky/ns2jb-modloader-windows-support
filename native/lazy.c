@@ -19,7 +19,10 @@ uint32_t lfs_program_for_pid(const struct lfs_lazy_api *a,uint64_t pid,uint64_t 
 
 struct system_block { uint64_t size,reserved; };
 struct lfs_arena { struct lfs_arena *next; uint64_t used,capacity,reserved; };
-struct owned_plan { struct lfs_arena *arena; uint64_t references; };
+/* Evict file references rather than retaining every file in a large modpack.
+ * This bounds open resources without limiting how many mod files can load. */
+struct owned_source { struct lfs_source *source; void *file; uint64_t used; };
+struct owned_plan { struct lfs_arena *arena; uint64_t references; uint32_t source_lock,reserved; uint64_t clock; struct owned_source sources[8]; };
 
 void lfs_copy(void *to,const void *from,uint64_t size){
  uint8_t *d=to;const uint8_t *s=from;for(uint64_t i=0;i<size;i++)d[i]=s[i];
@@ -58,7 +61,35 @@ void *lfs_lazy_plan_allocate(struct lfs_arena **arena,uint64_t size){
 void lfs_lazy_plan_finish(void *owner,struct lfs_arena *arena){((struct owned_plan *)owner-1)->arena=arena;}
 void lfs_lazy_owner_retain(const void *owner){if(owner)__atomic_fetch_add(&((struct owned_plan *)owner-1)->references,1,__ATOMIC_RELAXED);}
 void lfs_lazy_owner_release(const void *owner){
- if(owner){struct owned_plan *p=(struct owned_plan *)owner-1;if(__atomic_fetch_sub(&p->references,1,__ATOMIC_ACQ_REL)==1)lfs_arena_free(p->arena);}
+ if(owner){struct owned_plan *p=(struct owned_plan *)owner-1;if(__atomic_fetch_sub(&p->references,1,__ATOMIC_ACQ_REL)==1){
+  for(unsigned i=0;i<8;i++)if(p->sources[i].file)lfs_context()->sdk.file_release(p->sources[i].file);
+  lfs_arena_free(p->arena);
+ }}
+}
+uint32_t lfs_lazy_source_read(const void *owner,struct lfs_source *source,uint64_t offset,void *data,uint64_t size){
+ struct owned_plan *p=(struct owned_plan *)owner-1;struct lfs_context *c=lfs_context();void *file=0;uint32_t result=0;int first=0;struct owned_source *slot=0;
+ while(__atomic_exchange_n(&p->source_lock,1,__ATOMIC_ACQUIRE))lfs_pause();
+ for(unsigned i=0;i<8;i++){
+  struct owned_source *s=&p->sources[i];
+  if(s->source==source&&s->file){file=s->file;slot=s;break;}
+  if(!slot||!s->file||(slot->file&&s->used<slot->used))slot=s;
+ }
+ if(!file){
+  if(slot->file)c->sdk.file_release(slot->file);
+  slot->source=0;slot->file=0;
+  struct ns_out out={&file};result=c->open_file((uint8_t *)c->source_fs+8,&out,source->path,1);
+  if(!result&&!file)result=0xd401;
+  if(!result){slot->source=source;slot->file=file;}
+ }
+ if(!result){slot->used=++p->clock;((ns_ref_fn)(*(void ***)file)[0])(file);}
+ if(!p->reserved){p->reserved=1;first=1;}
+ __atomic_store_n(&p->source_lock,0,__ATOMIC_RELEASE);
+ if(result){lfs_note(source,0,result);return result;}
+ result=lfs_source_read_file(file,source,offset,data,size);
+ if(!result&&size&&!__atomic_exchange_n(&source->bytes,1,__ATOMIC_ACQ_REL))lfs_lazy_log("RomFS mod data read",0,offset,0,source->path);
+ if(first)lfs_lazy_log_flush();
+ c->sdk.file_release(file);
+ return result;
 }
 const struct lfs_lazy_game *lfs_lazy_game(uint64_t program){
  const struct lfs_lazy_config *c=lfs_lazy_config();if(!c)return 0;
@@ -111,13 +142,20 @@ void lfs_lazy_log_flush(void){
  if(a->log_buffered&&!a->log_failed&&write_log(a)&&c->flush(c->log_file))a->log_failed=1;
  __atomic_store_n(&a->log_lock,0,__ATOMIC_RELEASE);
 }
+void lfs_lazy_unconfigured(uint64_t program,uint64_t kind){
+ struct lfs_lazy_config *a=lfs_lazy_config();uint64_t platform=program>>56;
+ if(a&&(platform==1||platform==4)&&(program&UINT64_C(0x00ffffffffffffff))>=0x10000&&__atomic_fetch_add(&a->unconfigured_mounts,1,__ATOMIC_RELAXED)<16){
+  lfs_lazy_log("No matching game folder",program,kind,0,0);lfs_lazy_log_flush();
+ }
+}
 
 uint32_t lfs_lazy_mount_current(void *root,struct ns_out *out){
  struct lfs_lazy_config *a=lfs_lazy_config();uint32_t result=a->mount_current(root,out);
- if(result)return result;
- if(!result&&lfs_context()->enabled){
+ if(!lfs_context()->enabled)return result;
+ if(lfs_context()->enabled){
   uint64_t program=0;uint64_t pid=*(uint64_t *)((uint8_t *)root+0x30);
   uint32_t lookup=lfs_program_for_pid(&a->api,pid,&program);
+  if(result){lfs_lazy_log("Original RomFS mount failed",program,pid,result,0);lfs_lazy_log_flush();return result;}
   if(!lookup)result=lfs_lazy_attach_storage(*out->value,program);
   else{lfs_lazy_log("Program lookup",0,pid,lookup,0);lfs_lazy_log_flush();}
   if(result){lfs_lazy_log("RomFS mount",program,pid,result,0);lfs_lazy_log_flush();}
@@ -126,9 +164,11 @@ uint32_t lfs_lazy_mount_current(void *root,struct ns_out *out){
 }
 uint32_t lfs_lazy_mount_program(void *root,struct ns_out *out,uint64_t program){
  struct lfs_lazy_config *a=lfs_lazy_config();uint32_t result=a->mount_program(root,out,program);
+ if(result&&lfs_context()->enabled&&lfs_lazy_game(program)){lfs_lazy_log("Original RomFS mount failed",program,0,result,0);lfs_lazy_log_flush();}
  if(!result&&lfs_context()->enabled){result=lfs_lazy_attach_storage(*out->value,program);if(result&&*out->value){lfs_context()->sdk.storage_release(*out->value);*out->value=0;}}return result;
 }
 uint32_t lfs_lazy_mount_data(void *root,struct ns_out *out,uint64_t program,uint32_t storage){
  struct lfs_lazy_config *a=lfs_lazy_config();uint32_t result=a->mount_data(root,out,program,storage);
+ if(result&&lfs_context()->enabled&&lfs_lazy_game(program)){lfs_lazy_log("Original data mount failed",program,storage,result,0);lfs_lazy_log_flush();}
  if(!result&&lfs_context()->enabled){result=lfs_lazy_attach_storage(*out->value,program);if(result&&*out->value){lfs_context()->sdk.storage_release(*out->value);*out->value=0;}}return result;
 }

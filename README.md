@@ -74,7 +74,7 @@ Keep the microSD inserted. You can disconnect the PC and switch between modded g
 - **FS/RPC compatibility:** The loader checks the FS functions it needs rather than requiring a specific firmware or exploit game. Other exploits can work too, provided they expose the required native FS access through an ns2jb-compatible RPC session.
 - **Sessions:** Install once per boot. After a failed native operation, reboot before trying again.
 - **Updating:** Replace the PC `ModLoader/` folder with the new ZIP's copy. Keep your mod folders on the SD.
-- **Logs:** If a mod does not work, send the contents of `SD:/ns2jb-modloader/logs/`. Reports include activation, mounted games, replaced/added files, IPS Build IDs and the first read errors. The loader keeps the last three reports, up to 1 MiB each, without continuous logging.
+- **Logs:** If a mod does not work, send the contents of `SD:/ns2jb-modloader/logs/`. Reports are automatic and include game IDs, replaced/added files, first reads, IPS Build IDs and native errors. No debug mode is needed. The loader keeps the last three reports, up to 1 MiB each, without continuous logging.
 
 Game assets, firmware, keys and mods are not included. [GPL-2.0](LICENSE).
 

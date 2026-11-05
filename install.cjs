@@ -44,16 +44,19 @@ async function main(argv=process.argv.slice(2)){
  // The shared run lock also prevents installation from a second checkout.
  const lock=path.join(run,'ns2jb-modloader-install.json');fs.writeFileSync(lock,JSON.stringify({session,directory,started:new Date().toISOString(),status:'preparing'})+'\n',{flag:'wx',mode:0o600});
  const update=value=>writeJson(lock,{session,directory,...value});
- let collection,prepared;const diagnostics=require('./lib/diagnostics.cjs'),reportPath=diagnostics.logPath(session);
+ let collection,prepared,captureSession;const diagnostics=require('./lib/diagnostics.cjs'),reportPath=diagnostics.logPath(session);
  async function saveReport(plan,error){
   try{const report=diagnostics.report({session,sdPath:reportPath,collection,plan,error,status:error?'stopped':'prepared'});await diagnostics.writeReport(run,report);return report;}
   catch(error){console.warn('WARNING: Could not save the SD report: '+error.message);return null;}
  }
  try{
   console.log('Using ns2jb session '+session);
-  const {captureNative}=require('./lib/native-capture.cjs'),capture=await captureNative(run,directory);
-  collection=await require('./lib/sd-mods.cjs').collectSdMods(run,path.join(directory,'sd-inputs'),'/ns2jb-modloader',{nativePreparation:true});describe(collection);
+  const {captureNative}=require('./lib/native-capture.cjs');captureSession=await captureNative(run,directory,{retainClient:true});const capture=captureSession.file;
+  collection=await require('./lib/sd-mods.cjs').collectSdMods(run,path.join(directory,'sd-inputs'),'/ns2jb-modloader',{nativePreparation:true,client:captureSession.client,processHandle:captureSession.processHandle});describe(collection);
   const plan=require('./lib/lazy-context.cjs').plan(collection,session),preparedDirectory=path.join(directory,'prepared');fs.mkdirSync(preparedDirectory,{recursive:true,mode:0o700});
+  const profile=JSON.parse(fs.readFileSync(path.join(directory,'native-fs/manifest.json')));
+  plan.nativeProfile={sha256:profile.sha256,validatedRanges:profile.validatedRanges};
+  plan.nativeRuntime=require('./lib/native/artifacts.cjs').artifacts().manifest.files['templates.json'];
   const file=path.join(preparedDirectory,plan.payload.filename);fs.writeFileSync(file,Buffer.alloc(0),{mode:0o600});prepared={plan,file};
   const report=await saveReport(plan);if(report)plan.diagnostics={...report,buffer:undefined,text:report.buffer.toString('utf8'),size:report.buffer.length};writeJson(path.join(preparedDirectory,'overlay.json'),plan);
   console.log('Registering '+plan.titleIds.length+' game folder(s); game files will be prepared on the console when opened.');
@@ -68,7 +71,7 @@ async function main(argv=process.argv.slice(2)){
   resident.stockRoRestored=true;resident.readyForGameHandoff=true;resident.handoff=result;writeJson(path.join(directory,'resident-install.json'),resident);
   update({status:'ready',titleIds:prepared.plan.titleIds,nativeOnMount:true});console.log('READY — Stop your ns2jb host with Ctrl+C and wait for cleanup. Close SmileBASIC without rebooting, then open your game.');
  }catch(error){update({status:'stopped',error:error.message,inspectBeforeRetry:true});if(!/pending|timed out|disconnected/i.test(error.message)){if(collection?.reader){await collection.reader.close();collection.reader=null;}await saveReport(null,error);}throw error;}
- finally{if(!collection?.bootstrap?.bridge.c.pending){if(collection?.reader)await collection.reader.close();if(collection?.bootstrap&&!collection.bootstrap.transferred)await collection.bootstrap.release();}}
+ finally{if(!collection?.bootstrap?.bridge.c.pending){if(collection?.reader)await collection.reader.close();if(collection?.bootstrap&&!collection.bootstrap.transferred)await collection.bootstrap.release();}if(captureSession&&!collection?.bootstrap&&!captureSession.client.pending&&!captureSession.client.record.closed)await captureSession.client.close();}
 }
 module.exports={main,options,verifiedRun,warnIgnoredPatches};
 if(require.main===module)main().catch(error=>{console.error('INSTALL STOPPED: '+error.message);process.exitCode=1;});
