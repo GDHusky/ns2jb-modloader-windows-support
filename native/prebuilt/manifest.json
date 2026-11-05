@@ -2,21 +2,21 @@
   "schema": 1,
   "zig": "0.15.2",
   "sources": {
-    "native/romfs.c": "89a457b1e0a1cd0e69af0545686a1bcb8235e64e487d4f286085a4cec61fe0d6",
-    "native/namespace.c": "87a184bde79eaad6814137b4ba42f2788ccf78b72d2ef50f390a3f259c194c6f",
+    "native/romfs.c": "d4b7a9b061bca06a57664fea25dfb2f46de980588c912905ca55b5ce503816b2",
+    "native/namespace.c": "b16977fcdacf49734881469b3446d2f236a78bbeb004c9a66406fd3caab5c152",
     "native/diagnostics.c": "d4720625bc0653e36f6ec7773ff308cf8e4b15356669261fd4569283723e68e4",
     "native/inventory.c": "31975873bfa0d89789335afc4c7e3dc60437a4410b09fd7195ef7056a170bc90",
     "native/capture.c": "4fe84f9e663baf56669308e6b7aeb302435e5672ae669888e45046d278d86a83",
     "native/verify.c": "3b75f361e3e0b96496a810984a7892ff33666f4ff38925f88cde434073fd0912",
     "native/lazy.c": "65d3f8680f41ab9414c15bd1fc348777330110c71924432c4fb1687d7da720fc",
-    "native/lazy-romfs.c": "bba81a244cff92835ed0a1086e07687cdd9c67da80d17557a34ca43ac347e5c0",
-    "native/lazy-codefs.c": "25c9f1edb561b8c8265f586277dce1a55875fa6426e447e15d45d55f2c876031",
-    "native/lazy-nso.c": "cd86f8dba0d0c69fb649d5e3911a7a01c3b6c849cb546bc463df20bb7db3095d",
+    "native/lazy-romfs.c": "0eb9da6c9902a314c1a725575eab61acd2b6e15720541c9d533393b1a6ea5a06",
+    "native/lazy-codefs.c": "9f0253c5d9d3c886b92b321959ac048aef657e07481b93ddd55445d0a73a206d",
+    "native/lazy-nso.c": "2ab7388a55b186510408bf0a383c8416e52f9f90d4a7e79fd8cd29bd26d172d8",
     "native/minilibc.c": "bc252849bc0897e6c4371cae46a5233f785336eaa8b68678ed77ec23e95d55e4",
     "native/zbic-native.c": "c5ed7aefc496f583b297a6e48d7ab81937ec17f64a14b0ec9aa295abffd537c1",
     "native/namespace.S": "64061834b60499951aeaccdc636931f1224991ca854038f7fe895b445ce3da1c",
-    "native/namespace.h": "88a769654b6513960ebbdb15ecac32af1f18fe89be07b95e83cf5683e5efed9c",
-    "native/lazy.h": "c5ba439ade93304455f79b15b6650305a6bf0033b0c6e7694f54f1b742ad3514",
+    "native/namespace.h": "ebbaa7a72c0913191c755c794476839f066513e3af7b935b4a51863293754257",
+    "native/lazy.h": "02e9c822d966399ef4243b1d938077178798d69e82945daac294af8a0b4b684e",
     "lib/native/call-source.cjs": "31fe1b652eda40208cc519e35d6a3b5b3683f1d30aa4a8e1529736d2488cfcfa",
     "native/vendor/zstd/zstd.inc": "4cd9bf41ead4f59b0380a5668b9b018010f5a7a893a2948e0ab84e1653a08b38",
     "native/vendor/freestanding/assert.h": "371de203806079e9a1b4fbdad5bf72df8d5fbb659144c2a8ee394f3e3ef9f28c",
@@ -26,7 +26,7 @@
     "native/vendor/freestanding/time.h": "c88d0d62cbec91922c054ac64cbc308412cf9304b51a2a3fb7b32d5f8b50be83"
   },
   "files": {
-    "templates.json": "46b1d7cd1ccce74abf3862ea434be87ee10eaac7f08331643a200f984b9c2068",
+    "templates.json": "87cd5ef1dfc13bb4f32fec6f8fdbef808b69114f6da79e5c87a98b110b371f03",
     "zbic.wasm": "332a0d964cdad308777f3c5d8732e2fa452a81858a008ec323a745ab7e4e763d"
   }
 }

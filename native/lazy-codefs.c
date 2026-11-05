@@ -9,23 +9,32 @@ static struct item *get(struct lfs_arena **arena,struct item **items,const char 
  struct item *i=lfs_arena_allocate(arena,sizeof(*i)+length+1);if(!i)return 0;
  char *text=(char *)(i+1);lfs_copy(text,name,length+1);i->file.name=text;i->file.observation.path=text;i->next=*items;*items=i;return i;
 }
-static uint32_t add_pfs(struct lfs_arena **arena,struct item **items,const struct lfs_lazy_file *image){
- uint8_t header[16];uint32_t result=lfs_source_read((const char *)&image->source,0,header,16);if(result)return result;
+static uint32_t pfs_read(const struct lfs_lazy_file *image,void *file,uint64_t at,void *data,uint64_t size){
+ return lfs_source_read_file(file,(struct lfs_source *)&image->source,at,data,size);
+}
+static uint32_t pfs_entries(struct lfs_arena **arena,struct item **items,const struct lfs_lazy_file *image,void *file){
+ uint8_t header[16];uint32_t result=pfs_read(image,file,0,header,16);if(result)return result;
  if(!lfs_equal(header,"PFS0",4))return 0xd401;
  uint64_t count=*(uint32_t *)(header+4),names=*(uint32_t *)(header+8),table=count*24,data_start=16+table+names;
  if(!count||data_start>image->size||table>UINT32_MAX||names>UINT32_MAX)return 0xd401;
  for(uint64_t i=0;i<count;i++){
-  uint8_t row[24];result=lfs_source_read((const char *)&image->source,16+i*24,row,24);if(result)return result;
+  uint8_t row[24];result=pfs_read(image,file,16+i*24,row,24);if(result)return result;
   uint64_t offset=*(uint64_t *)row,size=*(uint64_t *)(row+8);uint32_t name_at=*(uint32_t *)(row+16);
   if(offset>image->size-data_start||size>image->size-data_start-offset||name_at>=names)return 0xd401;
   char name[0x301];uint64_t length=names-name_at;if(length>sizeof(name))length=sizeof(name);
-  result=lfs_source_read((const char *)&image->source,16+table+name_at,name,length);if(result)return result;
+  result=pfs_read(image,file,16+table+name_at,name,length);if(result)return result;
   uint64_t n=0;for(;n<length&&name[n];n++)if(name[n]=='/'||name[n]=='\\')return 0xd401;
   if(!n||n==length||lfs_text_equal(name,".")||lfs_text_equal(name,".."))return 0xd401;
   struct item *item=get(arena,items,name);if(!item)return 0xd401;
   item->file.size=size;item->file.source_path=(const char *)&image->source;item->file.offset=data_start+offset;item->file.source_size=image->size;item->file.flags=1;
  }
  return 0;
+}
+static uint32_t add_pfs(struct lfs_arena **arena,struct item **items,const struct lfs_lazy_file *image){
+ struct lfs_context *c=lfs_context();void *file=0;struct ns_out out={&file};
+ uint32_t result=c->open_file((uint8_t *)c->source_fs+8,&out,image->source.path,1);
+ if(!result)result=file?pfs_entries(arena,items,image,file):0xd401;
+ if(file)c->sdk.file_release(file);return result;
 }
 static const struct ns_group *codefs(void *filesystem,struct ns_context *c){
  struct lfs_life *existing=lfs_lookup((uint8_t *)filesystem-8,LFS_CODEFS);if(existing)return existing->owner;
@@ -92,7 +101,7 @@ static const struct ns_group *codefs(void *filesystem,struct ns_context *c){
   }
  }
  lfs_lazy_log("ExeFS mounted",program,group?group->count:0,result,0);lfs_lazy_log_flush();
- if(result){lfs_arena_free(arena);return 0;}return group;
+ if(result){lfs_arena_free(arena);lfs_track((uint8_t *)filesystem-8,0,LFS_CODEFS);return 0;}return group;
 }
 const struct ns_group *lfs_lazy_codefs(void *filesystem,struct ns_context *c){
  lfs_lazy_plan_lock();const struct ns_group *group=codefs(filesystem,c);lfs_lazy_plan_unlock();return group;

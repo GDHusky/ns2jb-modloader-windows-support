@@ -1,6 +1,6 @@
 #include "lazy.h"
 #define NONE UINT32_MAX
-struct input { void *storage; struct lfs_source *source; uint64_t size,header[10]; };
+struct input { void *storage; struct lfs_source *source; uint64_t size,header[10]; void *file; };
 struct node {
  struct node *next;
  uint32_t parent,record,kind,length,added,changed;
@@ -24,7 +24,7 @@ struct builder {
 static uint64_t align(uint64_t n,uint64_t a){return (n+a-1)&~(a-1);}
 static uint32_t input_read(struct input *in,uint64_t at,void *data,uint64_t length){
  if(at>in->size||length>in->size-at)return 0xd401;
- if(in->source)return lfs_source_read((const char *)in->source,at,data,length);
+ if(in->source)return in->file?lfs_source_read_file(in->file,in->source,at,data,length):lfs_source_read((const char *)in->source,at,data,length);
  struct ns_buffer buffer={data,length};return lfs_context()->original_read((uint8_t *)in->storage+8,at,&buffer,length);
 }
 static uint32_t input_header(struct input *in){
@@ -156,24 +156,30 @@ static void replace(struct builder *b,const char *path,struct lfs_source *source
  struct node *n=path_node(b,path,1,1);if(!n){if(!b->error)b->error=0xd401;return;}
  n->source=source;n->source_offset=offset;n->changed=1;*(uint64_t *)(n->data+16)=size;
 }
-static uint32_t add_image(struct builder *b,const struct lfs_lazy_file *file){
- struct input in={.source=(struct lfs_source *)&file->source,.size=file->size};uint32_t result=input_header(&in);if(result)return result;
+static uint32_t image_entries(struct builder *b,struct input *in){
+ uint32_t result=input_header(in);if(result)return result;
  for(unsigned type=0;type<2;type++){
   unsigned table=type?7:3,fixed=type?32:24;
-  for(uint64_t at=0;at<in.header[table+1];){
-   uint8_t data[32];result=input_read(&in,in.header[table]+at,data,fixed);if(result)return result;
+  for(uint64_t at=0;at<in->header[table+1];){
+   uint8_t data[32];result=input_read(in,in->header[table]+at,data,fixed);if(result)return result;
    uint32_t length=*(uint32_t *)(data+fixed-4);uint64_t bytes=align(fixed+length,4);
-   if(length>0x300||bytes>in.header[table+1]-at)return 0xd401;
-   char path[0x301];result=image_path(&in,(uint32_t)at,type,path);if(result)return result;
+   if(length>0x300||bytes>in->header[table+1]-at)return 0xd401;
+   char path[0x301];result=image_path(in,(uint32_t)at,type,path);if(result)return result;
    if(type){
     uint64_t offset=*(uint64_t *)(data+8),size=*(uint64_t *)(data+16);
-    if(offset>in.size-in.header[9]||size>in.size-in.header[9]-offset)return 0xd401;
-    replace(b,path,in.source,in.header[9]+offset,size);
+    if(offset>in->size-in->header[9]||size>in->size-in->header[9]-offset)return 0xd401;
+    replace(b,path,in->source,in->header[9]+offset,size);
    }else if(!path_node(b,path,0,1)&&!b->error)b->error=0xd401;
    if(b->error)return b->error;at+=bytes;
   }
  }
  return 0;
+}
+static uint32_t add_image(struct builder *b,const struct lfs_lazy_file *file){
+ struct input in={.source=(struct lfs_source *)&file->source,.size=file->size};struct lfs_context *c=lfs_context();struct ns_out out={&in.file};
+ uint32_t result=c->open_file((uint8_t *)c->source_fs+8,&out,file->source.path,1);
+ if(!result)result=in.file?image_entries(b,&in):0xd401;
+ if(in.file)c->sdk.file_release(in.file);return result;
 }
 static uint32_t attach_storage(void *storage,uint64_t program){
  const struct lfs_lazy_game *game=lfs_lazy_game(program);if(!game){lfs_lazy_unconfigured(program,1);return 0;}if(lfs_lookup(storage,LFS_STORAGE))return 0;

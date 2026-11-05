@@ -74,4 +74,5 @@ void lfs_lazy_stream_release(void *);
 uint32_t lfs_lazy_patch_file(void *,struct lfs_life *,const struct ns_file *,const struct lfs_lazy_game *);
 uint32_t lfs_lazy_nso_read(struct lfs_life *,uint64_t *,int64_t,const struct ns_buffer *,int64_t,uint32_t);
 uint32_t lfs_lazy_nso_size(struct lfs_life *,uint64_t *);
+uint32_t lfs_lazy_directory_size(void *,const struct ns_file *,const struct ns_group *,uint64_t *);
 #endif

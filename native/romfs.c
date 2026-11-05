@@ -29,9 +29,10 @@ void lfs_release(void *object,ns_ref_fn original){
   uint32_t active=1;
   if(__atomic_compare_exchange_n(&n->active,&active,2,0,__ATOMIC_ACQ_REL,__ATOMIC_ACQUIRE)){
    struct lfs_context *c=lfs_context();
-   const void *owner=n->plan_owner;void *stream=n->stream;
+   const void *owner=n->plan_owner;void *stream=n->stream,*filesystem=n->filesystem;
    original(object);
    if(stream)lfs_lazy_stream_release(stream);
+   if(filesystem)lfs_filesystem_release(filesystem);
    if(owner)lfs_lazy_owner_release(owner);
    if(owner||stream)lfs_lazy_log_flush();
    __atomic_store_n(&n->active,0,__ATOMIC_RELEASE);
@@ -54,7 +55,7 @@ struct lfs_life *lfs_track(void *object,const void *owner,uint32_t kind){
  if(!n){__atomic_store_n(&c->lock,0,__ATOMIC_RELEASE);return 0;}
  if(fresh)lfs_zero(n,sizeof(*n));
  __atomic_store_n(&n->object,object,__ATOMIC_RELAXED);n->original=*(void ***)object;n->owner=owner;__atomic_store_n(&n->kind,kind,__ATOMIC_RELAXED);n->release_ops=0;n->cursor=n->mode=0;
- n->plan_owner=0;n->stream=0;
+ n->plan_owner=0;n->stream=0;n->filesystem=0;
  uint32_t before[16],after[16],offset=0,candidates=0;
  for(unsigned i=0;i<16;i++)before[i]=__atomic_load_n((uint32_t *)object+i,__ATOMIC_RELAXED);
  ((ns_ref_fn)n->original[0])(object);

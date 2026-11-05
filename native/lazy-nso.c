@@ -29,14 +29,6 @@ static uint32_t read_raw(struct nso *n,uint64_t at,void *data,uint64_t size){
  return result?result:count==size?0:0xd401;
 }
 static uint32_t zbic_input(void *n,uint64_t at,void *data,uint64_t size){return read_raw(n,at,data,size);}
-static struct patch *sort(struct patch *list){
- if(!list||!list->next)return list;
- struct patch *slow=list,*fast=list->next;while(fast&&fast->next){slow=slow->next;fast=fast->next->next;}
- struct patch *right=slow->next;slow->next=0;list=sort(list);right=sort(right);struct patch head={0},*tail=&head;
- while(list&&right){if(list->at<=right->at){tail->next=list;list=list->next;}else{tail->next=right;right=right->next;}tail=tail->next;}
- tail->next=list?list:right;return head.next;
-}
-static uint8_t patch_byte(const struct patch *p,uint64_t at){return p->data[p->repeat?0:at-p->at];}
 static int matching(const char *path,const uint8_t *build){
  const char *base=path;for(uint64_t i=0;path[i];i++)if(path[i]=='/')base=path+i+1;
  unsigned digits=0;while(base[digits]&&base[digits]!='.')digits++;
@@ -66,7 +58,7 @@ static uint32_t parse(struct nso *n,const struct lfs_lazy_file *file){
   if(file->size-at<2)return 0xd401;
   uint64_t length=be(data+at,2);at+=2;uint32_t repeated=0;const uint8_t *bytes=data+at;
   if(length){if(length>file->size-at)return 0xd401;at+=length;}
-  else{if(file->size-at<3)return 0xd401;length=be(data+at,2);bytes=data+at+2;at+=3;repeated=1;if(!length)return 0xd401;}
+  else{if(file->size-at<3)return 0xd401;length=be(data+at,2);bytes=data+at+2;at+=3;repeated=1;if(!length)continue;}
   if(offset+length<=256)continue;
   if(offset<256){uint64_t skip=256-offset;offset=256;length-=skip;if(!repeated)bytes+=skip;}
   struct patch *p=lfs_arena_allocate(&n->arena,sizeof(*p));if(!p)return 0xd401;
@@ -83,16 +75,12 @@ static uint32_t initialize(struct nso *n){
   s->file=u32(n->header+at);s->address=u32(n->header+at+4);s->size=s->virtual_size=u32(n->header+at+8);s->packed=(n->flags&(1u<<i))?u32(n->header+0x60+i*4):s->size;
   if(s->file>n->file->size||s->packed>n->file->size-s->file||(s->size&&s->file<256)||(i&&n->segments[i-1].address+n->segments[i-1].size>s->address))return 0xd401;
  }
- struct patch *head=0,**tail=&head,*last=0;
- for(struct patch *p=sort(n->patches);p;){
-  struct patch *next=p->next;
-  if(last&&p->at<last->at+last->size){
-   uint64_t overlap=last->at+last->size-p->at;if(overlap>p->size)overlap=p->size;
-   for(uint64_t i=0;i<overlap;i++)if(patch_byte(last,p->at+i)!=patch_byte(p,p->at+i))return 0xd401;
-   if(overlap==p->size){p=next;continue;}
-   p->at+=overlap;p->size-=overlap;if(!p->repeat)p->data+=overlap;
-  }
-  p->next=0;*tail=p;tail=&p->next;last=p;
+ /* IPS writes are ordered: a later record overwrites an earlier record.
+  * Keep that order across matching patch files, including overlapping RLE. */
+ struct patch *head=0;
+ for(struct patch *p=n->patches;p;){struct patch *next=p->next;p->next=head;head=p;p=next;}
+ n->patches=head;
+ for(struct patch *p=head;p;p=p->next){
   uint64_t cursor=p->at,end=p->at+p->size;
   while(cursor<end){
    int which=-1;
@@ -102,9 +90,8 @@ static uint32_t initialize(struct nso *n){
    }
    if(which<0)return 0xd401;
   }
-  p=next;
  }
- n->patches=head;n->size=256;
+ n->size=256;
  for(unsigned i=0;i<3;i++){
   struct segment *s=&n->segments[i];s->virtual_at=(n->size+15)&~UINT64_C(15);
   if(s->virtual_at>UINT32_MAX||s->virtual_size>UINT32_MAX||s->virtual_size>UINT32_MAX-s->virtual_at)return 0xd401;
@@ -119,8 +106,8 @@ static uint32_t initialize(struct nso *n){
  *(uint32_t *)(n->header+12)=n->flags&~UINT32_C(0xbf);
  return 0;
 }
-uint32_t lfs_lazy_patch_file(void *object,struct lfs_life *life,const struct ns_file *file,const struct lfs_lazy_game *game){
- (void)game;struct lfs_lazy_config *config=lfs_lazy_config();if(!config->patch_count||file->size<256)return 0;
+static uint32_t patch_file(void *object,struct lfs_life *life,const struct ns_file *file,int report){
+ struct lfs_lazy_config *config=lfs_lazy_config();if(!config->patch_count||file->size<256)return 0;
  struct nso initial={.file=file,.object=object};uint8_t header[256];uint32_t result=read_raw(&initial,0,header,256);if(result)return result;
  if(!lfs_equal(header,"NSO0",4))return 0;
  uint64_t matches=0;for(uint64_t i=0;i<config->patch_count;i++)if(matching(config->patches[i].name,header+0x40))matches++;
@@ -128,17 +115,32 @@ uint32_t lfs_lazy_patch_file(void *object,struct lfs_life *life,const struct ns_
  /* Build ID is recorded even when every supplied patch belongs to another
   * game version. This makes an inactive patch visible in the normal report. */
  char build[65];static const char hex[]="0123456789abcdef";for(unsigned i=0;i<32;i++){build[i*2]=hex[header[0x40+i]>>4];build[i*2+1]=hex[header[0x40+i]&15];}build[64]=0;
- lfs_lazy_log("NSO file",owner?owner->program_id:0,file->size,0,file->name);
- lfs_lazy_log("NSO Build ID",owner?owner->program_id:0,matches,0,build);
- if(!matches){lfs_lazy_log_flush();return 0;}
+ if(report){lfs_lazy_log("NSO file",owner?owner->program_id:0,file->size,0,file->name);lfs_lazy_log("NSO Build ID",owner?owner->program_id:0,matches,0,build);}
+ if(!matches){if(report)lfs_lazy_log_flush();return 0;}
  struct lfs_arena *arena=0;struct nso *n=lfs_arena_allocate(&arena,sizeof(*n));if(!n){lfs_arena_free(arena);return 0xd401;}
  n->arena=arena;n->file=file;n->object=object;
  for(uint64_t i=0;i<config->patch_count&&!result;i++)if(matching(config->patches[i].name,header+0x40)){
-  result=parse(n,&config->patches[i]);lfs_lazy_log("IPS matched",owner?owner->program_id:0,config->patches[i].size,result,config->patches[i].source.path);
+  result=parse(n,&config->patches[i]);if(report)lfs_lazy_log("IPS matched",owner?owner->program_id:0,config->patches[i].size,result,config->patches[i].source.path);
  }
  if(!result)result=initialize(n);
  if(!result)life->stream=n;else{lfs_lazy_log("IPS preparation error",owner?owner->program_id:0,file->size,result,file->name);lfs_arena_free(n->arena);}
- lfs_lazy_log_flush();return result;
+ if(report||result)lfs_lazy_log_flush();return result;
+}
+uint32_t lfs_lazy_patch_file(void *object,struct lfs_life *life,const struct ns_file *file,const struct lfs_lazy_game *game){
+ (void)game;return patch_file(object,life,file,1);
+}
+uint32_t lfs_lazy_directory_size(void *filesystem,const struct ns_file *file,const struct ns_group *group,uint64_t *size){
+ *size=file->size;if(file->size<256)return 0;
+ struct ns_context *c=lfs_context()->codefs;char name[0x302];name[0]='/';uint64_t length=lfs_text_length(file->name);if(length>0x300)return 0xd401;lfs_copy(name+1,file->name,length+1);
+ void *object=0;struct ns_out out={&object};
+ uint32_t result=file->source_path?c->open_file(c->source_fs,&out,((const struct lfs_source *)file->source_path)->path,1):c->open_file(filesystem,&out,name,1);
+ if(!result&&!object)result=0xd401;
+ if(!result){
+  struct lfs_life temporary={.plan_owner=group};result=patch_file(object,&temporary,file,0);
+  if(temporary.stream){if(!result)*size=((const struct nso *)temporary.stream)->size;lfs_lazy_stream_release(temporary.stream);}
+  c->release(object);
+ }
+ return result;
 }
 static uint32_t next_byte(struct nso *n,uint8_t *value){
  struct decoder *d=n->decoder;struct segment *s=&n->segments[d->segment];
@@ -191,7 +193,7 @@ static uint32_t segment_read(struct nso *n,unsigned index,uint64_t at,void *data
  }
  lfs_zero((uint8_t *)data+original,length-original);
  uint64_t start=s->address+at,end=start+length;
- for(const struct patch *p=n->patches;p&&p->at<end;p=p->next){
+ for(const struct patch *p=n->patches;p;p=p->next){
   uint64_t lo=p->at>start?p->at:start,hi=p->at+p->size<end?p->at+p->size:end;
   if(hi>lo){if(p->repeat){for(uint64_t i=lo;i<hi;i++)((uint8_t *)data)[i-start]=p->data[0];}else lfs_copy((uint8_t *)data+lo-start,p->data+lo-p->at,hi-lo);}
  }

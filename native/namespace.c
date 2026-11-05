@@ -82,7 +82,13 @@ static uint32_t directory_read(void *object,uint64_t *read,const struct ns_buffe
   const struct ns_file *file=&g->files[slot];if(file->flags&2)continue;
   uint8_t *row=(uint8_t *)buffer->data+count*0x310;lfs_zero(row,0x310);
   for(unsigned i=0;i<0x300&&file->name[i];i++)row[i]=(uint8_t)file->name[i];
-  row[0x304]=1;if(!(n->mode&0x80000000u))*(uint64_t *)(row+0x308)=file->size;count++;
+  row[0x304]=1;
+  if(!(n->mode&0x80000000u)){
+   uint64_t size=file->size;
+   if(n->filesystem){uint32_t result=lfs_lazy_directory_size((uint8_t *)n->filesystem+8,file,g,&size);if(result)return result;}
+   *(uint64_t *)(row+0x308)=size;
+  }
+  count++;
  }
  *read=count;return 0;
 }
@@ -132,7 +138,10 @@ uint32_t lfs_namespace_directory(void *fs,struct ns_out *out,const char *path,ui
  if(g&&!result){
   void *object=*out->value;struct lfs_life *n=lfs_track(object,g,LFS_DIRECTORY);
   if(!n){((ns_ref_fn)(*(void ***)object)[1])(object);*out->value=0;result=0xd401;add(&c->errors,1);}
-  else{n->mode=mode;if(lfs_lazy_config()){n->plan_owner=g;lfs_lazy_owner_retain(g);}add(&c->matched,1);}
+  else{n->mode=mode;if(lfs_lazy_config()){
+   n->plan_owner=g;lfs_lazy_owner_retain(g);
+   if(lfs_lazy_config()->patch_count){n->filesystem=(uint8_t *)fs-8;((ns_ref_fn)(*(void ***)n->filesystem)[0])(n->filesystem);}
+  }add(&c->matched,1);}
  }
  add(&c->active,-1);return result;
 }
