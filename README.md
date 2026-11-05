@@ -2,11 +2,11 @@
 
 Load **RomFS and ExeFS mods by Title ID** on Switch 2, directly from microSD.
 
-Requires a microSD or microSD Express card and an existing [ns2jb](https://gitlab.com/kurumuz/ns2jb) **FS 4/4 session with RPC running**.
+Requires a microSD or microSD Express card and an existing **RPC session with the required FS access**, provided by [ns2jb](https://gitlab.com/kurumuz/ns2jb) or another compatible exploit.
 
 [Download](https://github.com/SebaaMG/ns2jb-modloader/releases/latest) and extract the ZIP on your PC.
 
-**Mod compatibility:** Some older Switch 1 ExeFS mods need updates for games that changed from 32-bit to 64-bit, such as Mario Kart 8 Deluxe. Most Switch 1 games were already 64-bit. RomFS mods may still work if the game's file formats and paths are unchanged.
+**Mod compatibility:** Some older Switch 1 ExeFS mods need updates for games that changed from 32-bit to 64-bit, such as Mario Kart 8 Deluxe. Most Switch 1 games were already 64-bit. RomFS mods may still work if the game's file formats and paths are unchanged. Plugins, cheats and overlays do not work yet.
 
 **PC:** Linux/WSL and Node.js 22+ (the runtime used for ns2jb).
 
@@ -44,7 +44,7 @@ For example, if you want to install the 200cc mod for Mario Kart World and the d
 
 ## 2. Load your mods
 
-With the **SD card inserted in your Switch 2** and **FS 4/4 verified and RPC running**, keep the ns2jb host open. Open another terminal and run these commands, replacing the example path with the path to the extracted `ModLoader/` folder:
+With the **SD card inserted in your Switch 2**, **FS access verified and RPC running**, keep the ns2jb host open. Open another terminal and run these commands, replacing the example path with the path to the extracted `ModLoader/` folder:
 
 ```sh
 cd "/path/to/extracted/zip/ModLoader"
@@ -71,7 +71,7 @@ Keep the microSD inserted. You can disconnect the PC and switch between modded g
 - **Session selection:** If automatic detection is unavailable, use `node load.cjs --run-dir "/path/to/ns2jb/runs/switch2-SESSION"`.
 - **Rebuilding from source:** `node tools/build.cjs` requires Zig 0.15.2. The release includes the built components; Python is only needed for the developer checks in `native/verify.py`.
 - **Cards:** Regular microSD tested. microSD Express uses the same filesystem interface but still needs hardware testing.
-- **Firmware:** The loader checks the FS functions it uses rather than a firmware version number. An ns2jb FS 4/4 session is required.
+- **FS/RPC compatibility:** The loader checks the FS functions it needs rather than requiring a specific firmware or exploit game. Other exploits can work too, provided they expose the required native FS access through an ns2jb-compatible RPC session.
 - **Sessions:** Install once per boot. After a failed native operation, reboot before trying again.
 - **Logs:** If a mod does not work, send the contents of `SD:/ns2jb-modloader/logs/`. The loader keeps the last three reports, up to 1 MiB each.
 
