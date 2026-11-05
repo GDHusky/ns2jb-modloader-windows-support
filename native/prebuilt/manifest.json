@@ -2,16 +2,16 @@
   "schema": 1,
   "zig": "0.15.2",
   "sources": {
-    "native/romfs.c": "ee5e382d18ea90c36d5f5b5b5eb4013a47968e6979da43e776df3f27e0e2a1f4",
+    "native/romfs.c": "3a498dad728fec55dd84a53ded65d2b5d931c3f56db81b2dcc9df2b9c99026ca",
     "native/namespace.S": "7733dd07d3f8fd12ff3b0bfcae2e27678c6f76e827a3f8f3befa7f855c6b61f3",
-    "native/namespace.c": "6e9b6b753b89f0f03c78d50de809332bee5ca62c308a5d60f878525c8079a787",
-    "native/namespace.h": "c6a1f5308be094f187bbe65050c64aa5e0403e31aa896b8ec0b301322e2bc597",
+    "native/namespace.c": "e356077bbb735265bdb878496a3e31e630366943d2fda8eb87d47a5b4ef515fa",
+    "native/namespace.h": "491a2d9f5aad4bd437fa01502dc6c205fa9e29ca0e37b16b499f28d3d184bc11",
     "native/diagnostics.c": "f488d90de6695253c616e1c04487fb48ebfec87f8d4c704e27c73036fcc93329",
     "lib/native/call-source.cjs": "50b4a5d226db05a56700b7d700aaa84cfd38b94a1e34a56fa3ad4e9bc4e2336d",
     "native/vendor/zstd/zstd.inc": "4cd9bf41ead4f59b0380a5668b9b018010f5a7a893a2948e0ab84e1653a08b38"
   },
   "files": {
-    "templates.json": "c9fbd279196897afe1f5d60c87c60d9367238c99e4b089c186341024861432fd",
+    "templates.json": "7f7a43bc7b5ce6b5d343c33ef96113e861b4d5315bfcd34bd67a4f26281656ac",
     "zbic.wasm": "332a0d964cdad308777f3c5d8732e2fa452a81858a008ec323a745ab7e4e763d"
   }
 }

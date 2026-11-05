@@ -22,11 +22,13 @@ class Model:
  def __init__(self,view=None,matches=True,ref_offset=32):
   self.uc=Uc(UC_ARCH_ARM64,UC_MODE_ARM);self.view=view;self.matches=matches;self.ref_offset=ref_offset;self.next_obj=OBJ+0x10000;self.next_heap=HEAP;self.objects={};self.regions=[];self.trace=[];self.source_error=0;self.original_error=0;self.short=False;self.alloc_fail=False;self.freed=[];self.steps=0
   self.report=None;self.log_write_error=0;self.log_flush_error=0;self.log_writes=0;self.log_flushes=0;self.logger_calls=0
-  for at,size in [(BASE+0x240000,0x10000),(RUNTIME,len(code)),(CTX,(len(context)+4095)&~4095),(STACK,0x20000),(ARGS,0x210000),(OBJ,0x200000),(HEAP,0x200000),(RETURN,4096),(BASE+0x69000,4096),(BASE+0x4b000,4096),(BASE+0x103000,0x5000),(BASE+0x150000,4096)]:self.uc.mem_map(at,size)
+  for at,size in [(BASE+0x240000,0x10000),(RUNTIME,len(code)),(CTX,(len(context)+4095)&~4095),(STACK,0x20000),(ARGS,0x210000),(OBJ,0x200000),(HEAP,0x200000),(RETURN,4096),(BASE+0x69000,4096),(BASE+0x4b000,4096),(BASE+0x103000,0x6000),(BASE+0x150000,4096)]:self.uc.mem_map(at,size)
   self.uc.mem_write(RUNTIME,code);self.uc.mem_write(BASE+0x24d100,gateway);self.uc.mem_write(CTX,context)
-  self.file_table=OBJ+0x1000;self.fs_table=OBJ+0x2000;self.dir_table=OBJ+0x3000
-  for vt,kind in [(self.file_table,'file'),(self.fs_table,'fs'),(self.dir_table,'dir')]:
-   slots=[BASE+0x150000]*16;slots[0]=BASE+(0x4b8c0 if kind=='fs' else 0x1036f0);slots[1]=BASE+(0x103390 if kind=='fs' else 0x104e10);slots[4]=BASE+(0x150100 if kind=='dir' else 0x104ef0);slots[5]=BASE+0x150200;slots[8]=BASE+0x105480;self.uc.mem_write(vt,b''.join(pack(v)for v in slots))
+  for h in layout['hooks']:self.uc.mem_write(int(h['target']),bytes.fromhex(h['replacementHex']))
+  self.file_table=OBJ+0x1000;self.fs_table=OBJ+0x2000;self.dir_table=OBJ+0x3000;self.storage_table=OBJ+0x4000
+  targets=layout['sdk']['targets']
+  for vt,kind in [(self.file_table,'file'),(self.fs_table,'fs'),(self.dir_table,'dir'),(self.storage_table,'storage')]:
+   slots=[BASE+0x150000]*16;slots[0]=BASE+(0x4b8c0 if kind=='fs' else 0x1036f0);slots[1]=BASE+targets[{'fs':'filesystemRelease','dir':'directoryRelease','storage':'storageRelease','file':'fileRelease'}[kind]];slots[4]=BASE+(0x107570 if kind=='storage'else targets['directoryRead']if kind=='dir'else targets['fileRead']);slots[5]=BASE+targets['directoryCount'];slots[8]=BASE+(0x107600 if kind=='storage'else targets['fileSize']);self.uc.mem_write(vt,b''.join(pack(v)for v in slots))
   self.source=self.object('fs',address=OBJ+0x200,sd=True,ref=1,ref_offset=40)
   self.log_file=self.object('file',address=OBJ+0x400,size=q(context,192))
   if view:
@@ -40,8 +42,8 @@ class Model:
  def u32(self,addr):return struct.unpack('<I',self.uc.mem_read(addr,4))[0]
  def object(self,kind,address=None,ref=1,ref_offset=None,**kw):
   address=address or self.next_obj;self.next_obj=max(self.next_obj,address+0x100)
-  off=ref_offset if ref_offset is not None else (40 if kind=='fs'else 32);vt=self.fs_table if kind=='fs'else self.dir_table if kind=='dir'else self.file_table
-  self.uc.mem_write(address,bytes(128));self.uc.mem_write(address,pack(vt));self.uc.mem_write(address+off,struct.pack('<I',ref));self.objects[address]=dict(kind=kind,ref_offset=off,dead=False,**kw);return address
+  off=ref_offset if ref_offset is not None else (40 if kind=='fs'else 32);vt=self.fs_table if kind=='fs'else self.dir_table if kind=='dir'else self.storage_table if kind=='storage'else self.file_table
+  self.uc.mem_write(address,bytes(128));self.uc.mem_write(address,pack(vt));self.uc.mem_write(address+off,struct.pack('<I',ref));self.objects[address]=dict(kind=kind,ref_offset=off,dead=False,vtable=vt,**kw);return address
  def bytes_at(self,offset,n):
   out=bytearray([0x6b])*n
   for start,data in self.regions:
@@ -79,8 +81,9 @@ class Model:
    if self.alloc_fail:self.ret(0);return
    ptr=self.next_heap;self.next_heap+=(a[0]+15)&~15;assert self.next_heap<HEAP+0x200000;self.ret(ptr);return
   if pc==BASE+0x69580:self.ret();return
-  if pc in [BASE+0x1036f0,BASE+0x4b8c0,BASE+0x104e10,BASE+0x103390]:
+  if pc in [BASE+0x1036f0,BASE+0x4b8c0]+[BASE+layout['sdk']['original'][name]for name in ['fileRelease','filesystemRelease','storageRelease','directoryRelease']]:
    obj=a[0];entry=self.objects[obj];off=entry['ref_offset'];refs=self.u32(obj+off);assert refs>0 and not entry['dead'],('dead reference',hex(obj),hex(pc))
+   assert self.u64(obj)==entry['vtable'],'SDK CFI rejected a changed service vtable'
    refs+=1 if pc in[BASE+0x1036f0,BASE+0x4b8c0]else -1;uc.mem_write(obj+off,struct.pack('<I',refs))
    if not refs:entry['dead']=True;self.freed.append(obj)
    self.ret();return
@@ -92,12 +95,12 @@ class Model:
    if self.original_error:self.ret(self.original_error);return
    if offset+n>self.view['storageSize']:self.ret(0xc102);return
    uc.mem_write(ptr,self.bytes_at(offset,n));self.ret();return
-  if pc==BASE+0x104ef0:
+  if pc==BASE+layout['sdk']['original']['fileRead']:
    obj,out,offset,pair,n,opt=a;assert opt==0;entry=self.objects[obj];ptr,cap=struct.unpack('<QQ',uc.mem_read(pair,16));assert n<=cap and not entry['dead']
    self.trace.append(('file',entry.get('remote',entry.get('name','')),offset,n))
    if self.source_error:self.ret(self.source_error);return
    data=self.file_bytes(entry,offset,n);uc.mem_write(ptr,data);uc.mem_write(out,pack(max(0,len(data)-int(self.short))));self.ret();return
-  if pc==BASE+0x105480:
+  if pc==BASE+layout['sdk']['original']['fileSize']:
    entry=self.objects[a[0]];uc.mem_write(a[1],pack(entry['size']));self.ret();return
   for kind,offset in layout['namespace']['original'].items():
    if pc!=BASE+offset:continue
@@ -204,6 +207,7 @@ for group in plan['namespaces']:
  for entry in [e for e in plan['exefs']if e['titleId']==group['titleId']and e['modified']]:
   replacement=entry['replacement'];name='/'+entry['name'];result,_=m.ns('type',name);assert result==0;result,file=m.ns('open',name);assert result==0
   assert m.invoke(m.u64(m.u64(file)+64),[file,ARGS+64])==0 and m.u64(ARGS+64)==replacement['size'];passed+=1
+  revision=m.u64(CTX+200);result,empty=m.file_read(file,0,0);assert result==0 and empty==b'' and m.u64(CTX+200)==revision;passed+=1
   ranges=[(0,min(256,replacement['size'])),(max(0,replacement['size']-7),32)]
   ranges +=[(part['offset'],min(part['length']+8,4096))for part in replacement.get('segments',[])]
   for offset,n in ranges:

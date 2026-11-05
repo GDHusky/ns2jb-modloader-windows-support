@@ -9,6 +9,7 @@ typedef uint32_t (*ns_type_fn)(void *,uint32_t *,const char *);
 typedef uint32_t (*ns_read_fn)(void *,uint64_t *,int64_t,const struct ns_buffer *,int64_t,uint32_t);
 typedef uint32_t (*ns_size_fn)(void *,uint64_t *);
 typedef void (*ns_ref_fn)(void *);
+typedef uint32_t (*ns_directory_read_fn)(void *,uint64_t *,const struct ns_buffer *);
 struct lfs_segment { uint64_t offset,length,source_offset; const char *source_path; };
 struct lfs_view {
  uint64_t original_size,size,entry_offset,prefix_offset;
@@ -38,6 +39,14 @@ struct ns_context {
  uint64_t calls,matched,errors,active;
 };
 struct lfs_life;
+struct lfs_sdk {
+ ns_read_fn file_read;
+ ns_size_fn file_size;
+ ns_ref_fn file_release,filesystem_release,storage_release;
+ ns_directory_read_fn directory_read;
+ ns_size_fn directory_count;
+ ns_ref_fn directory_release;
+};
 typedef uint32_t (*ns_write_fn)(void *,int64_t,const struct ns_buffer *,int64_t,uint32_t);
 struct lfs_context {
  char magic[8];
@@ -67,6 +76,7 @@ struct lfs_context {
  char *error_log;
  struct lfs_source *last_error_source;
  uint64_t identity_mismatches;
+ struct lfs_sdk sdk;
  struct lfs_view views[];
 };
 enum { LFS_STORAGE=1,LFS_CODEFS,LFS_SLICE,LFS_DIRECTORY };
@@ -76,10 +86,10 @@ struct lfs_life {
  const void *owner;
  uint32_t ref_offset,active,release_ops,kind;
  uint64_t cursor,mode;
- void *table[16];
 };
 _Static_assert(sizeof(struct lfs_view)==288,"RomFS view ABI");
-_Static_assert(sizeof(struct lfs_context)==304,"RomFS context ABI");
+_Static_assert(sizeof(struct lfs_context)==368,"RomFS context ABI");
+_Static_assert(sizeof(struct lfs_life)==64,"Owned lifetime ABI");
 _Static_assert(sizeof(struct lfs_source)==48,"Source counter ABI");
 _Static_assert(sizeof(struct ns_file)==112,"CodeFS file ABI");
 _Static_assert(sizeof(struct ns_group)==424,"CodeFS group ABI");
@@ -88,11 +98,11 @@ _Static_assert(sizeof(struct ns_context)==112,"CodeFS context ABI");
 struct lfs_context *lfs_context(void);
 struct lfs_life *lfs_lookup(void *,uint32_t);
 struct lfs_life *lfs_track(void *,const void *,uint32_t);
-void lfs_release(void *);
+void lfs_release(void *,ns_ref_fn);
 void lfs_flush(void);
 void lfs_observe(struct lfs_source *,uint64_t,uint32_t);
 static inline void lfs_note(struct lfs_source *source,uint64_t bytes,uint32_t result){
- if(source&&!__atomic_load_n(result?&source->errors:&source->reads,__ATOMIC_RELAXED)){
+ if(source&&(result||bytes)&&!__atomic_load_n(result?&source->errors:&source->reads,__ATOMIC_RELAXED)){
   struct lfs_context *c=lfs_context();
   if(c->log_file&&!__atomic_load_n(&c->log_errors,__ATOMIC_RELAXED))lfs_observe(source,bytes,result);
  }

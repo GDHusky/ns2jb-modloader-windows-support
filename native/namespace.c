@@ -48,12 +48,12 @@ static uint32_t slice_read(void *object,uint64_t *read,int64_t offset,const stru
    if(stop<=start)continue;
    struct ns_buffer b={(uint8_t *)buffer->data+start-(uint64_t)offset,stop-start};uint32_t result;
    if(s->source_path)result=lfs_source_read(s->source_path,s->source_offset+start-s->offset,b.data,b.capacity);
-   else{uint64_t count=0;result=((ns_read_fn)n->original[4])(object,&count,file->offset+s->source_offset+start-s->offset,&b,b.capacity,option);if(!result&&count!=b.capacity)result=0xd401;}
+   else{uint64_t count=0;result=lfs_context()->sdk.file_read(object,&count,file->offset+s->source_offset+start-s->offset,&b,b.capacity,option);if(!result&&count!=b.capacity)result=0xd401;}
    if(result){lfs_note((struct lfs_source *)&file->observation,0,result);return result;}done+=b.capacity;
   }
   *read=done;uint32_t result=done==amount?0:0xd401;lfs_note((struct lfs_source *)&file->observation,result?0:done,result);return result;
  }
- uint32_t result=((ns_read_fn)n->original[4])(object,read,(uint64_t)offset+file->offset,buffer,amount,option);lfs_note((struct lfs_source *)&file->observation,result?0:*read,result);return result;
+ uint32_t result=lfs_context()->sdk.file_read(object,read,(uint64_t)offset+file->offset,buffer,amount,option);lfs_note((struct lfs_source *)&file->observation,result?0:*read,result);return result;
 }
 static uint32_t slice_size(void *object,uint64_t *size){
  struct lfs_life *n=lfs_lookup(object,LFS_SLICE);if(!n)return 0xd401;
@@ -71,13 +71,31 @@ static uint32_t directory_count(void *object,uint64_t *count){
 static uint32_t directory_read(void *object,uint64_t *read,const struct ns_buffer *buffer){
  struct lfs_life *n=lfs_lookup(object,LFS_DIRECTORY);if(!n)return 0xd401;
  const struct ns_group *g=n->owner;uint64_t capacity=buffer->capacity/0x310,count=0;
- if(n->mode&2)while(n->cursor<g->count&&count<capacity){
-  const struct ns_file *file=&g->files[n->cursor++];if(file->flags&2)continue;
+ if(n->mode&2)while(count<capacity){
+  uint64_t slot=__atomic_load_n(&n->cursor,__ATOMIC_RELAXED);if(slot>=g->count)break;
+  if(!__atomic_compare_exchange_n(&n->cursor,&slot,slot+1,0,__ATOMIC_RELAXED,__ATOMIC_RELAXED))continue;
+  const struct ns_file *file=&g->files[slot];if(file->flags&2)continue;
   uint8_t *row=(uint8_t *)buffer->data+count*0x310;lfs_zero(row,0x310);
   for(unsigned i=0;i<0x300&&file->name[i];i++)row[i]=(uint8_t)file->name[i];
   row[0x304]=1;if(!(n->mode&0x80000000u))*(uint64_t *)(row+0x308)=file->size;count++;
  }
  *read=count;return 0;
+}
+uint32_t lfs_file_read(void *object,uint64_t *read,int64_t offset,const struct ns_buffer *buffer,int64_t length,uint32_t option){
+ if(lfs_lookup(object,LFS_SLICE))return slice_read(object,read,offset,buffer,length,option);
+ return lfs_context()->sdk.file_read(object,read,offset,buffer,length,option);
+}
+uint32_t lfs_file_size(void *object,uint64_t *size){
+ if(lfs_lookup(object,LFS_SLICE))return slice_size(object,size);
+ return lfs_context()->sdk.file_size(object,size);
+}
+uint32_t lfs_directory_read(void *object,uint64_t *read,const struct ns_buffer *buffer){
+ if(lfs_lookup(object,LFS_DIRECTORY))return directory_read(object,read,buffer);
+ return lfs_context()->sdk.directory_read(object,read,buffer);
+}
+uint32_t lfs_directory_count(void *object,uint64_t *count){
+ if(lfs_lookup(object,LFS_DIRECTORY))return directory_count(object,count);
+ return lfs_context()->sdk.directory_count(object,count);
 }
 uint32_t lfs_namespace_open(void *fs,struct ns_out *out,const char *path,uint32_t mode,struct ns_context *c){
  if(!c||c->magic!=0x34465343u)return 0xd401;
@@ -91,12 +109,6 @@ uint32_t lfs_namespace_open(void *fs,struct ns_out *out,const char *path,uint32_
   if(!result&&(file->source_path||file->count||file->offset||file->size!=file->source_size)){
    void *object=*out->value;struct lfs_life *n=lfs_track(object,file,LFS_SLICE);
    if(!n){c->release(object);*out->value=0;result=0xd401;}
-   else{
-    n->table[4]=(void *)slice_read;
-    unsigned slot=0;for(unsigned i=4;i<16;i++)if(n->original[i]==(void *)c->size){slot=i;break;}
-    if(!slot){lfs_release(object);*out->value=0;result=0xd401;}
-    else n->table[slot]=(void *)slice_size;
-   }
   }
   if(result){add(&c->errors,1);lfs_note((struct lfs_source *)&file->observation,0,result);}
  }
@@ -110,7 +122,7 @@ uint32_t lfs_namespace_directory(void *fs,struct ns_out *out,const char *path,ui
  if(g&&!result){
   void *object=*out->value;struct lfs_life *n=lfs_track(object,g,LFS_DIRECTORY);
   if(!n){((ns_ref_fn)(*(void ***)object)[1])(object);*out->value=0;result=0xd401;add(&c->errors,1);}
-  else{n->mode=mode;n->table[4]=(void *)directory_read;n->table[5]=(void *)directory_count;add(&c->matched,1);}
+  else{n->mode=mode;add(&c->matched,1);}
  }
  add(&c->active,-1);return result;
 }

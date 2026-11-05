@@ -13,28 +13,31 @@ void lfs_zero(void *data,uint64_t n){
 }
 struct lfs_life *lfs_lookup(void *object,uint32_t kind){
  for(struct lfs_life *n=__atomic_load_n(&lfs_context()->objects,__ATOMIC_ACQUIRE);n;n=__atomic_load_n(&n->next,__ATOMIC_ACQUIRE))
-  if(__atomic_load_n(&n->active,__ATOMIC_ACQUIRE)==1&&__atomic_load_n(&n->object,__ATOMIC_RELAXED)==object&&__atomic_load_n(&n->kind,__ATOMIC_RELAXED)==kind)return n;
+  if(__atomic_load_n(&n->active,__ATOMIC_ACQUIRE)==1&&__atomic_load_n(&n->object,__ATOMIC_RELAXED)==object&&(!kind||__atomic_load_n(&n->kind,__ATOMIC_RELAXED)==kind))return n;
  return 0;
 }
 /* A retained reference keeps the SDK object alive while Release retires its
  * cache entry. The object's original destructor still owns its resources. */
-void lfs_release(void *object){
- void **table=*(void ***)object;
- struct lfs_life *n=(struct lfs_life *)((uint8_t *)table - offsetof(struct lfs_life,table));
+void lfs_release(void *object,ns_ref_fn original){
+ struct lfs_life *n=lfs_lookup(object,0);
+ if(!n){original(object);return;}
  __atomic_fetch_add(&n->release_ops,1,__ATOMIC_ACQ_REL);
- ((ns_ref_fn)n->original[1])(object);
+ original(object);
  if(__atomic_fetch_sub(&n->release_ops,1,__ATOMIC_ACQ_REL)==1&&
     __atomic_load_n((uint32_t *)((uint8_t *)object+n->ref_offset),__ATOMIC_ACQUIRE)==1){
   uint32_t active=1;
   if(__atomic_compare_exchange_n(&n->active,&active,2,0,__ATOMIC_ACQ_REL,__ATOMIC_ACQUIRE)){
    struct lfs_context *c=lfs_context();
-   __atomic_store_n((void ***)object,n->original,__ATOMIC_RELEASE);
-   ((ns_ref_fn)n->original[1])(object);
+   original(object);
    __atomic_store_n(&n->active,0,__ATOMIC_RELEASE);
    if(c->log_file&&!__atomic_load_n(&c->log_errors,__ATOMIC_RELAXED)&&__atomic_load_n(&c->revision,__ATOMIC_RELAXED)!=__atomic_load_n(&c->flushed_revision,__ATOMIC_RELAXED))lfs_flush();
   }
  }
 }
+void lfs_file_release(void *object){lfs_release(object,lfs_context()->sdk.file_release);}
+void lfs_filesystem_release(void *object){lfs_release(object,lfs_context()->sdk.filesystem_release);}
+void lfs_storage_release(void *object){lfs_release(object,lfs_context()->sdk.storage_release);}
+void lfs_directory_release(void *object){lfs_release(object,lfs_context()->sdk.directory_release);}
 struct lfs_life *lfs_track(void *object,const void *owner,uint32_t kind){
  struct lfs_context *c=lfs_context();
  while(__atomic_exchange_n(&c->lock,1,__ATOMIC_ACQUIRE))__asm__ volatile("yield");
@@ -55,11 +58,8 @@ struct lfs_life *lfs_track(void *object,const void *owner,uint32_t kind){
   ((ns_ref_fn)n->original[1])(object);if(fresh)c->free(n,sizeof(*n));n=0;
  }else{
   n->ref_offset=offset;
-  for(unsigned i=0;i<16;i++)n->table[i]=n->original[i];
-  n->table[1]=(void *)lfs_release;
   if(fresh){n->next=__atomic_load_n(&c->objects,__ATOMIC_RELAXED);__atomic_store_n(&c->objects,n,__ATOMIC_RELEASE);}
   __atomic_store_n(&n->active,1,__ATOMIC_RELEASE);
-  __atomic_store_n((void ***)object,n->table,__ATOMIC_RELEASE);
  }
  __atomic_store_n(&c->lock,0,__ATOMIC_RELEASE);return n;
 }
@@ -78,7 +78,7 @@ uint32_t lfs_source_read(const char *path,uint64_t offset,void *data,uint64_t si
  }
  struct ns_buffer buffer={data,size};uint64_t read=0;
  result=c->read(file,&read,(int64_t)offset,&buffer,(int64_t)size,0);
- ((ns_ref_fn)(*(void ***)file)[1])(file);
+ c->sdk.file_release(file);
  add(&c->source_reads,1);
  result=result?result:(read==size?0:0xd401);lfs_note((struct lfs_source *)path,result?0:read,result);return result;
 }
