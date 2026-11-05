@@ -36,7 +36,7 @@ ns2jb-modloader/                     # On the SD card root
         └── <BUILD_ID>.ips
 ```
 
-Combine each game's mods in the same `romfs/` or `exefs/` folder. One installation handles all included games.
+Combine each game's mods in the same `romfs/` or `exefs/` folder. One installation handles all included games. The loader reads mod files in place; it does not duplicate your modpack or write patched executables to the SD.
 
 For example, if you want to install the 200cc mod for Mario Kart World and the download contains `200cc/romfs/System/GymlArchive/`, copy its `romfs/` folder into `SD:/ns2jb-modloader/contents/0400c3f00006e000/`. Keep the paths inside `romfs/` unchanged.
 

@@ -2,15 +2,15 @@
   "schema": 1,
   "zig": "0.15.2",
   "sources": {
-    "native/romfs.S": "841a22d7c76deddfbbcc805c5f09b003699425726e333221b3435abfcfa16de7",
-    "native/namespace.S": "46078c71d3ceb8754a29b53c709867038738690a7500e54c05f5a7f89ddf0a2c",
-    "native/namespace.c": "a3ba6730d0d6e4491ecd8f46657eb9d33c714cdecdf44987567689a62fd8bb90",
-    "native/namespace.h": "49ddbd4f9f2e07796f0fac89bafff27a90402f510e3d48ae7d05250047e4194d",
-    "lib/native/call-source.cjs": "f859e7de093b29558a88912cb67cae43b75837a65843c49809bb155a1232c494",
+    "native/romfs.c": "8d1193af91651cecf37e66d8e56e249d65292736ec1d14723522c6d9660794ab",
+    "native/namespace.S": "7733dd07d3f8fd12ff3b0bfcae2e27678c6f76e827a3f8f3befa7f855c6b61f3",
+    "native/namespace.c": "57ba863a28b23f4a7998fb878b4301ebbfdc37bd70c3ad96c9b46edb84e988ec",
+    "native/namespace.h": "9a4b97d842ea161f7bb733a5be01af3aeee6099111387b44a7750aece8429f4b",
+    "lib/native/call-source.cjs": "50b4a5d226db05a56700b7d700aaa84cfd38b94a1e34a56fa3ad4e9bc4e2336d",
     "native/vendor/zstd/zstd.inc": "4cd9bf41ead4f59b0380a5668b9b018010f5a7a893a2948e0ab84e1653a08b38"
   },
   "files": {
-    "templates.json": "f985fd4511f56a6b64ddac3d17d529cc1eaad447dcea0c18730c53dc96e63060",
+    "templates.json": "ac659d2fc11992cd6a6a8f3712aa33701ffb7fe885f644b261555ac4de9f491d",
     "zbic.wasm": "332a0d964cdad308777f3c5d8732e2fa452a81858a008ec323a745ab7e4e763d"
   }
 }

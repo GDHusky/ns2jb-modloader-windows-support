@@ -1,43 +1,33 @@
 .text
 .arch armv8.3-a
+.global lfs_context
+.global lfs_read_entry
+.global lfs_size_entry
 .global lfs_namespace_open_entry
 .global lfs_namespace_directory_entry
 .global lfs_namespace_type_entry
-.global lfs_namespace_original_open
-.global lfs_namespace_original_directory
-.global lfs_namespace_original_type
+lfs_context:
+ bti c
+ ldr x0, resident_context
+ ret
+lfs_read_entry:
+ bti c
+ b lfs_read
+lfs_size_entry:
+ bti c
+ b lfs_size
 lfs_namespace_open_entry:
  bti c
- ldr x4, context
+ ldr x4, namespace_context
  b lfs_namespace_open
 lfs_namespace_directory_entry:
  bti c
- ldr x4, context
+ ldr x4, namespace_context
  b lfs_namespace_directory
 lfs_namespace_type_entry:
  bti c
- ldr x3, context
+ ldr x3, namespace_context
  b lfs_namespace_type
-lfs_namespace_original_open:
- bti c
- pacibsp
- sub sp, sp, #0x70
- stp x29, x30, [sp, #0x30]
- str x23, [sp, #0x40]
- b original_open_tail
-lfs_namespace_original_directory:
- bti c
- pacibsp
- sub sp, sp, #0x70
- stp x29, x30, [sp, #0x30]
- str x23, [sp, #0x40]
- b original_directory_tail
-lfs_namespace_original_type:
- bti c
- pacibsp
- sub sp, sp, #0x60
- stp x29, x30, [sp, #0x30]
- stp x22, x21, [sp, #0x40]
- b original_type_tail
 .balign 8
-context: .xword namespace_context
+resident_context: .xword 0
+namespace_context: .xword 0
