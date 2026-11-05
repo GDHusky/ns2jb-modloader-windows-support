@@ -1,4 +1,5 @@
 #include "namespace.h"
+#include "lazy.h"
 static void decimal(char *out,uint64_t n){
  for(unsigned i=0;i<20;i++)out[i]=' ';
  unsigned i=20;do{out[--i]=(char)('0'+n%10);n/=10;}while(n&&i);
@@ -40,6 +41,11 @@ void lfs_flush(void){
 }
 void lfs_observe(struct lfs_source *source,uint64_t bytes,uint32_t result){
  struct lfs_context *c=lfs_context();if(!c->log_file||!source||__atomic_load_n(&c->log_errors,__ATOMIC_RELAXED))return;
+ if(lfs_lazy_config()){
+  if(__atomic_exchange_n(result?&source->errors:&source->reads,1,__ATOMIC_ACQ_REL))return;
+  lfs_lazy_log(result?"Source error":"Source first read",0,bytes,result,source->path);
+  if(result)lfs_lazy_log_flush();return;
+ }
  if(result){
   if(__atomic_exchange_n(&source->errors,1,__ATOMIC_ACQ_REL))return;
   __atomic_store_n(&source->result,result,__ATOMIC_RELAXED);
@@ -53,6 +59,14 @@ void lfs_observe(struct lfs_source *source,uint64_t bytes,uint32_t result){
 }
 uint64_t lfs_game_observations(void){
  struct lfs_context *c=lfs_context();
+ if(lfs_lazy_config()){
+  if(c->log_ready&&c->log_file&&!lfs_lazy_config()->log_failed){
+   *c->log_ready='1';struct ns_buffer b={c->log_ready,1};
+   if(c->write(c->log_file,(uint64_t)(c->log_ready-c->log),&b,1,0))lfs_lazy_config()->log_failed=1;
+   lfs_lazy_log("Loader active",0,lfs_lazy_config()->count,0,0);lfs_lazy_log_flush();
+  }
+  return 0;
+ }
  for(uint64_t i=0;i<c->source_count;i++){struct lfs_source *s=&c->sources[i];s->reads=s->bytes=s->errors=s->result=0;}
  for(uint32_t i=0;i<c->count;i++){struct lfs_source *s=&c->view_stats[i];s->reads=s->bytes=s->errors=s->result=0;}
  if(c->codefs)for(uint64_t i=0;i<c->codefs->count;i++){

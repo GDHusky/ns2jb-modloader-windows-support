@@ -53,7 +53,7 @@ node load.cjs
 
 The loader detects the active session and loads all mods from the SD. Wait for **READY**, then continue to step 3.
 
-Prepare each game once while it is installed or its cartridge is inserted. After that, its saved preparation can load mods while the game is absent; insert or reinstall the same game version before playing. Keep `ModLoader/state/` when updating the loader. Games with no usable preparation are listed as **PENDING** and do not block the others; they need their first preparation before their mods can load.
+Games do not need to be installed or inserted during this step. Their mods are applied when you open them, including games installed or cartridges inserted later during the same boot. No previous preparation or game cache is needed.
 
 ## 3. Open your games
 
@@ -73,7 +73,8 @@ Keep the microSD inserted. You can disconnect the PC and switch between modded g
 - **Cards:** Regular microSD tested. microSD Express uses the same filesystem interface but still needs hardware testing.
 - **FS/RPC compatibility:** The loader checks the FS functions it needs rather than requiring a specific firmware or exploit game. Other exploits can work too, provided they expose the required native FS access through an ns2jb-compatible RPC session.
 - **Sessions:** Install once per boot. After a failed native operation, reboot before trying again.
-- **Logs:** If a mod does not work, send the contents of `SD:/ns2jb-modloader/logs/`. The loader keeps the last three reports, up to 1 MiB each.
+- **Updating:** Replace the PC `ModLoader/` folder with the new ZIP's copy. Keep your mod folders on the SD.
+- **Logs:** If a mod does not work, send the contents of `SD:/ns2jb-modloader/logs/`. Reports include activation, mounted games, replaced/added files, IPS Build IDs and the first read errors. The loader keeps the last three reports, up to 1 MiB each, without continuous logging.
 
 Game assets, firmware, keys and mods are not included. [GPL-2.0](LICENSE).
 

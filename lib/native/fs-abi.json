@@ -49,6 +49,24 @@
       "size": 1088,
       "sha256": "5d44ea06c3cc2eaeff833b8f77bb0da1d713c1c59fa2b58da6b38c73dd70f1a4",
       "purpose": "owned native memory blocks"
+    },
+    {
+      "offset": 970752,
+      "size": 4096,
+      "sha256": "7722652ff440ed8d8ba80f80889a287e15199db4066dc79cd91fb2d7fb02a88e",
+      "purpose": "RomFS mount frontend"
+    },
+    {
+      "offset": 1183744,
+      "size": 4096,
+      "sha256": "6fa9176f5954779500514b2ffb194c0fd35c4a80ecf262ddb2fd29039682404a",
+      "purpose": "live process program registry"
+    },
+    {
+      "offset": 2400256,
+      "size": 4096,
+      "sha256": "30c1f19d3890663168af50b46b3259a756f4b7b53fcbbae8a4fca01c8cbe6cbc",
+      "purpose": "program registry shared reference release"
     }
   ],
   "padding": {

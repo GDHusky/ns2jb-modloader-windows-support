@@ -2,6 +2,13 @@
 #define NS2_LFS_NAMESPACE_H
 #include <stdint.h>
 #include <stddef.h>
+static inline void lfs_pause(void){
+#if defined(__aarch64__)
+ __asm__ volatile("yield");
+#else
+ __atomic_signal_fence(__ATOMIC_ACQUIRE);
+#endif
+}
 struct ns_out { void **value; };
 struct ns_buffer { void *data; uint64_t capacity; };
 typedef uint32_t (*ns_open_fn)(void *,struct ns_out *,const char *,uint32_t);
@@ -86,10 +93,12 @@ struct lfs_life {
  const void *owner;
  uint32_t ref_offset,active,release_ops,kind;
  uint64_t cursor,mode;
+ const void *plan_owner;
+ void *stream;
 };
 _Static_assert(sizeof(struct lfs_view)==288,"RomFS view ABI");
 _Static_assert(sizeof(struct lfs_context)==368,"RomFS context ABI");
-_Static_assert(sizeof(struct lfs_life)==64,"Owned lifetime ABI");
+_Static_assert(sizeof(struct lfs_life)==80,"Owned lifetime ABI");
 _Static_assert(sizeof(struct lfs_source)==48,"Source counter ABI");
 _Static_assert(sizeof(struct ns_file)==112,"CodeFS file ABI");
 _Static_assert(sizeof(struct ns_group)==424,"CodeFS group ABI");
@@ -99,6 +108,7 @@ struct lfs_context *lfs_context(void);
 struct lfs_life *lfs_lookup(void *,uint32_t);
 struct lfs_life *lfs_track(void *,const void *,uint32_t);
 void lfs_release(void *,ns_ref_fn);
+void lfs_file_release(void *);
 void lfs_flush(void);
 void lfs_observe(struct lfs_source *,uint64_t,uint32_t);
 static inline void lfs_note(struct lfs_source *source,uint64_t bytes,uint32_t result){

@@ -1,4 +1,5 @@
 #include "namespace.h"
+#include "lazy.h"
 static void add(uint64_t *p,int64_t n){ __atomic_fetch_add(p,n,__ATOMIC_RELAXED); }
 static int equal_name(const char *a,const char *b){
  for(unsigned i=0;i<0x301;i++){if(a[i]!=b[i])return 0;if(!a[i])return 1;}return 0;
@@ -10,6 +11,7 @@ static const struct ns_file *entry(const struct ns_group *g,const char *path){
 }
 static int interesting(struct ns_context *c,const char *path){
  if(!c->enabled||!path)return 0;
+ if(lfs_lazy_config())return 1;
  for(uint64_t i=0;i<c->count;i++){const struct ns_file *f=entry(&c->groups[i],path);if(f&&f->flags)return 1;}
  return 0;
 }
@@ -20,6 +22,7 @@ static int read_bytes(struct ns_context *c,void *file,uint64_t offset,void *data
 static const struct ns_group *owner(void *fs,struct ns_context *c){
  if(!c->enabled||fs==c->source_fs)return 0;
  struct lfs_life *n=lfs_lookup((uint8_t *)fs-8,LFS_CODEFS);if(n)return n->owner;
+ if(lfs_lazy_config())return lfs_lazy_codefs(fs,c);
  uint8_t npdm[128],main[256];uint64_t id=0,size=0;void *file=0;struct ns_out out={&file};
  if(c->open_file(fs,&out,"/main.npdm",1)||!file)return 0;
  int ok=read_bytes(c,file,0,npdm,128);const struct ns_group *g=0;
@@ -37,6 +40,7 @@ static const struct ns_group *owner(void *fs,struct ns_context *c){
 }
 static uint32_t slice_read(void *object,uint64_t *read,int64_t offset,const struct ns_buffer *buffer,int64_t length,uint32_t option){
  struct lfs_life *n=lfs_lookup(object,LFS_SLICE);if(!n)return 0xd401;
+ if(n->stream)return lfs_lazy_nso_read(n,read,offset,buffer,length,option);
  const struct ns_file *file=n->owner;
  if(offset<0||length<0||(uint64_t)offset>file->size||(uint64_t)length>buffer->capacity)return 0xd401;
  uint64_t amount=file->size-(uint64_t)offset;if(amount>(uint64_t)length)amount=(uint64_t)length;
@@ -57,6 +61,7 @@ static uint32_t slice_read(void *object,uint64_t *read,int64_t offset,const stru
 }
 static uint32_t slice_size(void *object,uint64_t *size){
  struct lfs_life *n=lfs_lookup(object,LFS_SLICE);if(!n)return 0xd401;
+ if(n->stream)return lfs_lazy_nso_size(n,size);
  *size=((const struct ns_file *)n->owner)->size;return 0;
 }
 static uint64_t file_count(const struct lfs_life *n){
@@ -106,9 +111,14 @@ uint32_t lfs_namespace_open(void *fs,struct ns_out *out,const char *path,uint32_
  else if(file->flags&2){add(&c->matched,1);result=0x202;}
  else{
   add(&c->matched,1);result=file->source_path?c->open_file(c->source_fs,out,((const struct lfs_source *)file->source_path)->path,mode):c->open_file(fs,out,path,mode);
-  if(!result&&(file->source_path||file->count||file->offset||file->size!=file->source_size)){
+  if(!result&&(lfs_lazy_config()||file->source_path||file->count||file->offset||file->size!=file->source_size)){
    void *object=*out->value;struct lfs_life *n=lfs_track(object,file,LFS_SLICE);
    if(!n){c->release(object);*out->value=0;result=0xd401;}
+   else if(lfs_lazy_config()){
+    n->plan_owner=g;lfs_lazy_owner_retain(g);
+    result=lfs_lazy_patch_file(object,n,file,lfs_lazy_game(g->program_id));
+    if(result){lfs_file_release(object);*out->value=0;}
+   }
   }
   if(result){add(&c->errors,1);lfs_note((struct lfs_source *)&file->observation,0,result);}
  }
@@ -122,7 +132,7 @@ uint32_t lfs_namespace_directory(void *fs,struct ns_out *out,const char *path,ui
  if(g&&!result){
   void *object=*out->value;struct lfs_life *n=lfs_track(object,g,LFS_DIRECTORY);
   if(!n){((ns_ref_fn)(*(void ***)object)[1])(object);*out->value=0;result=0xd401;add(&c->errors,1);}
-  else{n->mode=mode;add(&c->matched,1);}
+  else{n->mode=mode;if(lfs_lazy_config()){n->plan_owner=g;lfs_lazy_owner_retain(g);}add(&c->matched,1);}
  }
  add(&c->active,-1);return result;
 }
@@ -138,5 +148,7 @@ uint64_t lfs_initialize(void){
  struct lfs_context *c=lfs_context();
  c->reserved2=0;
  if(c->log_file)((ns_ref_fn)(*(void ***)c->log_file)[0])(c->log_file);
+ struct lfs_lazy_config *a=lfs_lazy_config();
+ if(a&&c->log_file&&a->set_log_size(c->log_file,a->log_limit))a->log_failed=1;
  ((ns_ref_fn)(*(void ***)c->source_fs)[0])(c->source_fs);return 0;
 }

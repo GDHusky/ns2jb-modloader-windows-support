@@ -12,10 +12,28 @@ struct inventory {
  uint64_t bytes,capacity,count;
  uint32_t error,reserved;
  char error_path[0x300];
+ void *memory_manager;
+ uint32_t (*allocate_block)(void *,void **,uint64_t);
+ uint32_t (*free_block)(void *,void *,uint64_t);
 };
 _Static_assert(offsetof(struct inventory,data)==56,"Inventory buffer ABI");
 _Static_assert(offsetof(struct inventory,error_path)==96,"Inventory error ABI");
-_Static_assert(sizeof(struct inventory)==864,"Inventory ABI");
+_Static_assert(sizeof(struct inventory)==888,"Inventory ABI");
+
+static void *inventory_allocate(struct inventory *a,uint64_t size){
+ if(!a->allocate_block||size<0x100000)return a->allocate(size);
+ if(size>UINT64_MAX-0x1010)return 0;
+ uint64_t bytes=(size+16+4095)&~UINT64_C(4095);void *memory=0;
+ if(a->allocate_block(a->memory_manager,&memory,bytes)||!memory)return 0;
+ *(uint64_t *)memory=bytes;return (uint8_t *)memory+16;
+}
+static void inventory_free(struct inventory *a,void *memory,uint64_t size){
+ if(a->allocate_block&&size>=0x100000){void *block=(uint8_t *)memory-16;a->free_block(a->memory_manager,block,*(uint64_t *)block);}
+ else a->free(memory,size);
+}
+uint64_t lfs_inventory_release(struct inventory *a){
+ if(a->data){inventory_free(a,a->data,a->capacity);a->data=0;a->bytes=a->capacity=a->count=0;}return 0;
+}
 
 static uint64_t text_length(const char *s){
  for(uint64_t n=0;n<0x301;n++)if(!s[n])return n;
@@ -36,9 +54,9 @@ static int append(struct inventory *a,const char *path,uint8_t type,uint8_t root
  if(a->bytes+length>a->capacity){
   uint64_t capacity=a->capacity?a->capacity:0x10000;
   while(capacity<a->bytes+length){if(capacity>UINT64_MAX/2)return 0;capacity*=2;}
-  uint8_t *data=a->allocate(capacity);if(!data)return 0;
+  uint8_t *data=inventory_allocate(a,capacity);if(!data)return 0;
   copy_bytes(data,a->data,a->bytes);
-  if(a->data)a->free(a->data,a->capacity);
+  if(a->data)inventory_free(a,a->data,a->capacity);
   a->data=data;a->capacity=capacity;
  }
  uint8_t *row=a->data+a->bytes;lfs_zero(row,length);

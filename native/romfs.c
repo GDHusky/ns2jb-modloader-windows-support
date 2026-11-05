@@ -1,4 +1,5 @@
 #include "namespace.h"
+#include "lazy.h"
 static void add(uint64_t *p,int64_t n){ __atomic_fetch_add(p,n,__ATOMIC_RELAXED); }
 int lfs_equal(const void *left,const void *right,uint64_t n){
  const uint8_t *a=left,*b=right;
@@ -28,7 +29,11 @@ void lfs_release(void *object,ns_ref_fn original){
   uint32_t active=1;
   if(__atomic_compare_exchange_n(&n->active,&active,2,0,__ATOMIC_ACQ_REL,__ATOMIC_ACQUIRE)){
    struct lfs_context *c=lfs_context();
+   const void *owner=n->plan_owner;void *stream=n->stream;
    original(object);
+   if(stream)lfs_lazy_stream_release(stream);
+   if(owner)lfs_lazy_owner_release(owner);
+   if(owner||stream)lfs_lazy_log_flush();
    __atomic_store_n(&n->active,0,__ATOMIC_RELEASE);
    if(c->log_file&&!__atomic_load_n(&c->log_errors,__ATOMIC_RELAXED)&&__atomic_load_n(&c->revision,__ATOMIC_RELAXED)!=__atomic_load_n(&c->flushed_revision,__ATOMIC_RELAXED))lfs_flush();
   }
@@ -40,7 +45,7 @@ void lfs_storage_release(void *object){lfs_release(object,lfs_context()->sdk.sto
 void lfs_directory_release(void *object){lfs_release(object,lfs_context()->sdk.directory_release);}
 struct lfs_life *lfs_track(void *object,const void *owner,uint32_t kind){
  struct lfs_context *c=lfs_context();
- while(__atomic_exchange_n(&c->lock,1,__ATOMIC_ACQUIRE))__asm__ volatile("yield");
+ while(__atomic_exchange_n(&c->lock,1,__ATOMIC_ACQUIRE))lfs_pause();
  struct lfs_life *n=lfs_lookup(object,kind);
  if(n){__atomic_store_n(&c->lock,0,__ATOMIC_RELEASE);return n;}
  for(n=__atomic_load_n(&c->objects,__ATOMIC_ACQUIRE);n;n=n->next)if(!__atomic_load_n(&n->active,__ATOMIC_ACQUIRE))break;
@@ -49,6 +54,7 @@ struct lfs_life *lfs_track(void *object,const void *owner,uint32_t kind){
  if(!n){__atomic_store_n(&c->lock,0,__ATOMIC_RELEASE);return 0;}
  if(fresh)lfs_zero(n,sizeof(*n));
  __atomic_store_n(&n->object,object,__ATOMIC_RELAXED);n->original=*(void ***)object;n->owner=owner;__atomic_store_n(&n->kind,kind,__ATOMIC_RELAXED);n->release_ops=0;n->cursor=n->mode=0;
+ n->plan_owner=0;n->stream=0;
  uint32_t before[16],after[16],offset=0,candidates=0;
  for(unsigned i=0;i<16;i++)before[i]=__atomic_load_n((uint32_t *)object+i,__ATOMIC_RELAXED);
  ((ns_ref_fn)n->original[0])(object);
@@ -113,7 +119,7 @@ uint32_t lfs_size(void *object,uint64_t *size){
  uint32_t result=c->original_size(object,size);
  if(!result&&c->enabled){
   struct lfs_life *n=lfs_lookup(object,LFS_STORAGE);
-  const struct lfs_view *v=n?n->owner:identify(object,*size);
+  const struct lfs_view *v=n?n->owner:lfs_lazy_config()?0:identify(object,*size);
   if(v)*size=v->size;
  }
  add(&c->active,-1);return result;
@@ -124,7 +130,7 @@ uint32_t lfs_read(void *object,int64_t at,const struct ns_buffer *buffer,int64_t
  if(!c->enabled||at<0||length<=0||end<(uint64_t)at||(uint64_t)length>buffer->capacity)goto original;
  struct lfs_life *n=lfs_lookup(object,LFS_STORAGE);const struct lfs_view *v;
  if(n)v=n->owner;
- else{uint64_t size;if(c->original_size(object,&size))goto original;v=identify(object,size);}
+ else{if(lfs_lazy_config())goto original;uint64_t size;if(c->original_size(object,&size))goto original;v=identify(object,size);}
  if(!v||end>v->size)goto original;
  uint32_t lo=0,hi=v->count;
  while(lo<hi){uint32_t mid=lo+(hi-lo)/2;const struct lfs_segment *s=&v->segments[mid];if(s->offset+s->length<=(uint64_t)at)lo=mid+1;else hi=mid;}
@@ -148,7 +154,10 @@ uint32_t lfs_read(void *object,int64_t at,const struct ns_buffer *buffer,int64_t
  }
  result=0;
 redirected:
- lfs_note(&c->view_stats[v-c->views],result?0:(uint64_t)length,result);
+ if(n&&n->plan_owner){
+  if(!result&&!__atomic_exchange_n(&n->mode,1,__ATOMIC_RELAXED)){lfs_lazy_log("RomFS first read",0,(uint64_t)length,0,0);lfs_lazy_log_flush();}
+  if(result){lfs_lazy_log("RomFS read error",0,(uint64_t)at,result,0);lfs_lazy_log_flush();}
+ }else lfs_note(&c->view_stats[v-c->views],result?0:(uint64_t)length,result);
  if(result)add(&c->errors,1);
  goto finish;
 original:
