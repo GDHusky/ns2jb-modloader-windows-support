@@ -51,6 +51,7 @@ async function main(argv=process.argv.slice(2)){
  }
  try{
   console.log('Using ns2jb session '+session);
+  const {captureNative}=require('./lib/native-capture.cjs'),capture=await captureNative(run,directory);
   collection=o.sd?await require('./lib/sd-mods.cjs').collectSdMods(run,path.join(directory,'sd-inputs')):collectMods(root);describe(collection);await saveReport();
   const {captureOrCachedGame,cachedTitles}=require('./lib/game-cache.cjs'),cacheRoot=path.join(root,'state/game-cache');
   if(collection.patches.length&&!o.titles.length)for(const id of cachedTitles(cacheRoot,collection.patches))if(!collection.games.some(g=>g.titleId===id))collection.games.push({titleId:id,romfs:[],exefs:[],patches:[],stubs:[],autoForGlobalPatches:true});
@@ -78,19 +79,18 @@ async function main(argv=process.argv.slice(2)){
   warnIgnoredPatches(prepared.plan);
   const packVerification=await require('./lib/verify-plan.cjs').verifyPlan(prepared.plan,prepared.file);writeJson(path.join(directory,'prepared/verification.json'),packVerification);
   if(collection.reader){await collection.reader.close();collection.reader=null;}
-  const {captureNative}=require('./lib/native-capture.cjs'),capture=await captureNative(run,directory);
   // Relocate the release-qualified templates and validate the actual layout.
   const {buildAll}=require('./lib/native.cjs');
   const {buildContext}=require('./lib/context.cjs');const native=await buildAll(0x4000000000n,0x6000000000n,prepared.plan,{capture,directory:path.join(directory,'offline-build')});buildContext(prepared.plan,{filesystem:{object:0x6100001000n},...(prepared.plan.diagnostics?{logFile:{object:0x6100002000n,write:0x4000105000n,flush:0x4000105300n}}:{})},0x4000000000n,0x6000000000n,native,0,fs.readFileSync(prepared.file));
   const {upload}=require('./lib/upload.cjs');await upload(run,prepared.plan,prepared.file,directory);
   update({status:'installing',titleIds:prepared.plan.titleIds});
-  const resident=await require('./lib/resident.cjs').install(run,prepared.plan,directory,capture);check(resident.verified,'Native overlay verification failed');
+  const resident=await require('./lib/resident.cjs').install(run,prepared.plan,directory,capture,collection.bootstrap);check(resident.verified,'Native overlay verification failed');
   if(o.keepRpc){update({status:'installed-rpc-held',titleIds:prepared.plan.titleIds});console.log('INSTALLED — RPC stays open. Stock RO restoration and game handoff have not run.');return;}
   const result=await require('./lib/native/handoff.cjs').apply(run,{residentDirectory:directory,contextMagic:'NS2LFS02'});check(result.stockRoProtocolVerified,'Stock RO verification failed');
   resident.stockRoRestored=true;resident.readyForGameHandoff=true;resident.handoff=result;writeJson(path.join(directory,'resident-install.json'),resident);
   update({status:'ready',titleIds:prepared.plan.titleIds,deferredGames:prepared.plan.deferredGames,pendingGames});console.log('READY — Stop your ns2jb host with Ctrl+C and wait for cleanup. Close SmileBASIC without rebooting, then open your game.');
  }catch(error){update({status:'stopped',error:error.message,inspectBeforeRetry:true});if(!/pending|timed out|disconnected/i.test(error.message)){if(collection?.reader){await collection.reader.close();collection.reader=null;}await saveReport(null,error);}throw error;}
- finally{if(collection?.reader)await collection.reader.close();}
+ finally{if(collection?.reader)await collection.reader.close();if(collection?.bootstrap&&!collection.bootstrap.transferred)await collection.bootstrap.release();}
 }
 module.exports={main,options,verifiedRun,warnIgnoredPatches};
 if(require.main===module)main().catch(error=>{console.error('INSTALL STOPPED: '+error.message);process.exitCode=1;});

@@ -7,11 +7,12 @@
     "native/namespace.c": "e356077bbb735265bdb878496a3e31e630366943d2fda8eb87d47a5b4ef515fa",
     "native/namespace.h": "491a2d9f5aad4bd437fa01502dc6c205fa9e29ca0e37b16b499f28d3d184bc11",
     "native/diagnostics.c": "f488d90de6695253c616e1c04487fb48ebfec87f8d4c704e27c73036fcc93329",
+    "native/inventory.c": "d4c061c91f31030ecc98226dc6b0d07755b716cd5f2d9a97a4905d0596ffff6c",
     "lib/native/call-source.cjs": "50b4a5d226db05a56700b7d700aaa84cfd38b94a1e34a56fa3ad4e9bc4e2336d",
     "native/vendor/zstd/zstd.inc": "4cd9bf41ead4f59b0380a5668b9b018010f5a7a893a2948e0ab84e1653a08b38"
   },
   "files": {
-    "templates.json": "7f7a43bc7b5ce6b5d343c33ef96113e861b4d5315bfcd34bd67a4f26281656ac",
+    "templates.json": "577c8e41161da1269d376a915b23c0823058d440156a5b7a43ba29d2f6564cca",
     "zbic.wasm": "332a0d964cdad308777f3c5d8732e2fa452a81858a008ec323a745ab7e4e763d"
   }
 }
