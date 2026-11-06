@@ -4,7 +4,7 @@ Load **RomFS and ExeFS mods by Title ID** on Switch 2, directly from microSD.
 
 Requires a microSD or microSD Express card and an existing **RPC session with the required FS access**, provided by [ns2jb](https://gitlab.com/kurumuz/ns2jb) or another compatible exploit.
 
-[Download](https://github.com/SebaaMG/ns2jb-modloader/releases/latest) and extract the ZIP on your PC.
+[Download](https://github.com/SebaaMG/ns2jb-modloader/releases/latest) and extract the latest ZIP on your PC.
 
 **Mod compatibility:** Some older Switch 1 ExeFS mods need updates for games that changed from 32-bit to 64-bit, such as Mario Kart 8 Deluxe. Most Switch 1 games were already 64-bit. RomFS mods may still work if the game's file formats and paths are unchanged. Plugins, cheats and overlays do not work yet.
 
