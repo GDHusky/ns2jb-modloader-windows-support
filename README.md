@@ -1,6 +1,6 @@
 # ns2jb-modloader
 
-Load **RomFS and ExeFS mods by Title ID** on Switch 2, directly from microSD.
+Load **RomFS and ExeFS mods by Title ID** on Switch 2, directly from microSD. Supports mods for both Switch 1 and Switch 2 games.
 
 Requires a microSD or microSD Express card and an existing **RPC session with the required FS access**, provided by [ns2jb](https://gitlab.com/kurumuz/ns2jb) or another compatible exploit.
 
