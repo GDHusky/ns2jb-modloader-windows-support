@@ -7,6 +7,8 @@
 .global lfs_namespace_open_entry
 .global lfs_namespace_directory_entry
 .global lfs_namespace_type_entry
+.global lfs_namespace_mount_entry
+.global lfs_codefs_original
 lfs_context:
  bti c
  ldr x0, resident_context
@@ -33,7 +35,15 @@ lfs_namespace_type_entry:
  bti c
  ldr x3, namespace_context
  b lfs_namespace_type
+lfs_namespace_mount_entry:
+ bti c
+ b lfs_namespace_mount
+lfs_codefs_original:
+ bti c
+ ldr x0, lfs_codefs_original_address
+ ret
 .balign 8
 resident_context: .xword 0
 namespace_context: .xword 0
 lazy_context: .xword 0
+lfs_codefs_original_address: .xword 0

@@ -17,3 +17,5 @@ exefs_patches/
 *.bea
 *.zip
 .DS_Store
+
+logs/

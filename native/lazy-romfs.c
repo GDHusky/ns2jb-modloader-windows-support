@@ -1,4 +1,5 @@
 #include "lazy.h"
+#include "trace.h"
 #define NONE UINT32_MAX
 struct input { void *storage; struct lfs_source *source; uint64_t size,header[10]; void *file; };
 struct node {
@@ -16,16 +17,17 @@ struct builder {
  struct input original;
  struct node **nodes;
  struct bucket **buckets;
- uint64_t slots,directory_size,file_size,virtual_size,piece_count;
+ uint64_t slots,directory_size,file_size,virtual_size,piece_count,program;
  struct piece *pieces;
  struct edit *edits[4];
- uint32_t error;
+ uint32_t error,diagnostic_count;
+ uint32_t diagnostic_parents[8];
 };
 static uint64_t align(uint64_t n,uint64_t a){return (n+a-1)&~(a-1);}
 static uint32_t input_read(struct input *in,uint64_t at,void *data,uint64_t length){
  if(at>in->size||length>in->size-at)return 0xd401;
  if(in->source)return in->file?lfs_source_read_file(in->file,in->source,at,data,length):lfs_source_read((const char *)in->source,at,data,length);
- struct ns_buffer buffer={data,length};return lfs_context()->original_read((uint8_t *)in->storage+8,at,&buffer,length);
+ struct ns_buffer buffer={data,length};return lfs_trace_original_read((uint8_t *)in->storage+8,at,&buffer,length);
 }
 static uint32_t input_header(struct input *in){
  uint32_t result=input_read(in,0,in->header,80);if(result)return result;
@@ -152,8 +154,37 @@ static uint32_t image_path(struct input *in,uint32_t record,uint32_t kind,char *
  if(record)return 0xd401;
  if(end==0x300)path[--end]='/';lfs_copy(path,path+end,0x301-end);return 0;
 }
+static void original_directory(struct builder *b,const char *path,uint64_t program){
+ if(!lfs_context()->log_file)return;
+ uint64_t length=lfs_text_length(path);if(length<4||path[length-4]!='.'||(path[length-3]!='p'&&path[length-3]!='P')||(path[length-2]!='a'&&path[length-2]!='A')||(path[length-1]!='k'&&path[length-1]!='K'))return;
+ char parent_path[0x301];lfs_copy(parent_path,path,length+1);uint64_t end=length;while(end>1&&parent_path[end-1]!='/')end--;parent_path[end>1?end-1:1]=0;
+ uint32_t saved_error=b->error;struct node *parent=path_node(b,parent_path,0,0);uint32_t diagnostic_error=b->error;b->error=saved_error;
+ if(!parent){if(diagnostic_error)lfs_lazy_log("Original directory diagnostic error",program,0,diagnostic_error,parent_path);return;}
+ for(uint32_t i=0;i<b->diagnostic_count;i++)if(b->diagnostic_parents[i]==parent->record)return;
+ if(b->diagnostic_count>=8)return;b->diagnostic_parents[b->diagnostic_count++]=parent->record;
+ if(parent->added){lfs_lazy_log("Original parent directory absent",program,0,0,parent_path);return;}
+ uint8_t directory[24];uint32_t result=input_read(&b->original,b->original.header[3]+parent->record,directory,24);
+ if(result){lfs_lazy_log("Original directory diagnostic error",program,0,result,parent_path);return;}
+ uint32_t record=*(uint32_t *)(directory+12);unsigned count=0;
+ while(record!=NONE&&count++<64){
+  uint8_t file[32];if(record>b->original.header[8]||32>b->original.header[8]-record)break;
+  result=input_read(&b->original,b->original.header[7]+record,file,32);if(result)break;
+  uint32_t n=*(uint32_t *)(file+28);uint64_t prefix=lfs_text_length(parent_path);
+  if(!n||n>0x300||n>b->original.header[8]-record-32||prefix+1+n>0x300)break;
+  char name[0x301];lfs_copy(name,parent_path,prefix);if(prefix!=1)name[prefix++]='/';
+  result=input_read(&b->original,b->original.header[7]+record+32,name+prefix,n);if(result)break;name[prefix+n]=0;
+  uint64_t original_offset=*(uint64_t *)(file+8),original_size=*(uint64_t *)(file+16);
+  lfs_lazy_log("Original directory file",program,original_size,0,name);
+  if(original_offset<=b->original.size-b->original.header[9]&&original_size<=b->original.size-b->original.header[9]-original_offset)
+   lfs_lazy_log("Original directory offset",program,b->original.header[9]+original_offset,0,name);
+  record=*(uint32_t *)(file+4);
+ }
+ if(result)lfs_lazy_log("Original directory diagnostic error",program,record,result,parent_path);
+ else if(record!=NONE)lfs_lazy_log("Original directory listing bounded",program,count,0,parent_path);
+}
 static void replace(struct builder *b,const char *path,struct lfs_source *source,uint64_t offset,uint64_t size){
  struct node *n=path_node(b,path,1,1);if(!n){if(!b->error)b->error=0xd401;return;}
+ if(n->added)original_directory(b,path,b->program);
  n->source=source;n->source_offset=offset;n->changed=1;*(uint64_t *)(n->data+16)=size;
 }
 static uint32_t image_entries(struct builder *b,struct input *in){
@@ -185,9 +216,10 @@ static uint32_t attach_storage(void *storage,uint64_t program){
  const struct lfs_lazy_game *game=lfs_lazy_game(program);if(!game){lfs_lazy_unconfigured(program,1);return 0;}if(lfs_lookup(storage,LFS_STORAGE))return 0;
  uint64_t relevant=0;for(uint64_t i=0;i<game->count;i++)if(game->files[i].kind<=LAZY_ROMFS||game->files[i].kind==LAZY_ROMFS_IMAGE)relevant++;
  if(!relevant)return 0;
- struct builder b={.original={.storage=storage},.slots=16};
+ struct builder b={.original={.storage=storage},.slots=16,.program=program};
  uint32_t result=lfs_context()->original_size(storage,&b.original.size);if(result){lfs_lazy_log("RomFS original size",program,0,result,0);lfs_lazy_log_flush();return result;}
  result=input_header(&b.original);if(result){lfs_lazy_log("RomFS original header",program,b.original.size,result,0);lfs_lazy_log_flush();return result;}
+ lfs_lazy_log("RomFS storage object",program,(uintptr_t)storage,0,0);
  while(b.slots<game->count*2){if(b.slots>UINT64_MAX/2)return 0xd401;b.slots*=2;}
  b.nodes=take(&b,b.slots*sizeof(*b.nodes));b.buckets=take(&b,b.slots*sizeof(*b.buckets));
  struct lfs_view *view=lfs_lazy_plan_allocate(&b.arena,sizeof(*view));if(!view)b.error=0xd401;
@@ -246,10 +278,12 @@ static uint32_t attach_storage(void *storage,uint64_t program){
   if(life)life->plan_owner=view;else b.error=0xd401;
  }
  lfs_lazy_log("RomFS mounted",program,b.original.size,b.error,0);
+ if(!b.error)lfs_lazy_log("RomFS virtual size",program,b.virtual_size,0,0);
  if(!b.error)for(uint64_t i=0;i<b.slots;i++)for(struct node *n=b.nodes[i];n;n=n->next)if(n->kind&&n->source)lfs_lazy_log(n->added?"RomFS added":"RomFS replaced",program,*(uint64_t *)(n->data+16),0,n->source->path);
  lfs_lazy_log_flush();
  if(b.error)lfs_arena_free(b.arena);return b.error;
 }
 uint32_t lfs_lazy_attach_storage(void *storage,uint64_t program){
- lfs_lazy_plan_lock();uint32_t result=attach_storage(storage,program);lfs_lazy_plan_unlock();return result;
+ uint64_t trace=lfs_lazy_game(program)?lfs_trace_begin(LFS_T_PREPARE,storage,0,program,0):0;
+ lfs_lazy_plan_lock();uint32_t result=attach_storage(storage,program);lfs_lazy_plan_unlock();lfs_trace_end(trace,result,program,0,0);if(trace)lfs_trace_checkpoint(1);return result;
 }

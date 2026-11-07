@@ -1,5 +1,6 @@
 #include "namespace.h"
 #include "lazy.h"
+#include "trace.h"
 static void decimal(char *out,uint64_t n){
  for(unsigned i=0;i<20;i++)out[i]=' ';
  unsigned i=20;do{out[--i]=(char)('0'+n%10);n/=10;}while(n&&i);
@@ -60,6 +61,8 @@ void lfs_observe(struct lfs_source *source,uint64_t bytes,uint32_t result){
 uint64_t lfs_game_observations(void){
  struct lfs_context *c=lfs_context();
  if(lfs_lazy_config()){
+  lfs_trace_initialize();
+  if(lfs_lazy_config()->trace)lfs_lazy_log(lfs_lazy_config()->trace->initialized==2?"Diagnostic trace enabled":"Diagnostic trace unavailable",0,40960,0,0);
   if(c->log_ready&&c->log_file&&!lfs_lazy_config()->log_failed){
    *c->log_ready='1';struct ns_buffer b={c->log_ready,1};
    if(c->write(c->log_file,(uint64_t)(c->log_ready-c->log),&b,1,0))lfs_lazy_config()->log_failed=1;

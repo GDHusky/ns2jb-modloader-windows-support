@@ -16,6 +16,7 @@ typedef uint32_t (*ns_type_fn)(void *,uint32_t *,const char *);
 typedef uint32_t (*ns_read_fn)(void *,uint64_t *,int64_t,const struct ns_buffer *,int64_t,uint32_t);
 typedef uint32_t (*ns_size_fn)(void *,uint64_t *);
 typedef void (*ns_ref_fn)(void *);
+typedef uint32_t (*ns_code_open_fn)(void *,struct ns_out *,const void *,uint32_t,uint64_t,uint32_t);
 typedef uint32_t (*ns_directory_read_fn)(void *,uint64_t *,const struct ns_buffer *);
 struct lfs_segment { uint64_t offset,length,source_offset; const char *source_path; };
 struct lfs_view {
@@ -91,7 +92,7 @@ struct lfs_life {
  struct lfs_life *next;
  void *object,**original;
  const void *owner;
- uint32_t ref_offset,active,release_ops,kind;
+ uint32_t ref_offset,active,release_mutex,kind;
  uint64_t cursor,mode;
  const void *plan_owner;
  void *stream;
@@ -108,6 +109,8 @@ _Static_assert(sizeof(struct ns_group)==424,"CodeFS group ABI");
 _Static_assert(offsetof(struct ns_group,npdm_header)==40,"NPDM ABI");
 _Static_assert(sizeof(struct ns_context)==112,"CodeFS context ABI");
 struct lfs_context *lfs_context(void);
+void lfs_mutex_lock(uint32_t *);
+void lfs_mutex_unlock(uint32_t *);
 struct lfs_life *lfs_lookup(void *,uint32_t);
 struct lfs_life *lfs_track(void *,const void *,uint32_t);
 void lfs_release(void *,ns_ref_fn);
@@ -127,7 +130,12 @@ uint32_t lfs_source_read(const char *,uint64_t,void *,uint64_t);
 uint32_t lfs_source_read_file(void *,struct lfs_source *,uint64_t,void *,uint64_t);
 uint32_t lfs_read(void *,int64_t,const struct ns_buffer *,int64_t);
 uint32_t lfs_size(void *,uint64_t *);
+uint32_t lfs_storage_range(void *,void *,int32_t,int64_t,int64_t);
+uint32_t lfs_storage_batch(void *,const struct ns_buffer *,const struct ns_buffer *,const struct ns_buffer *,const struct ns_buffer *,const struct ns_buffer *,const struct ns_buffer *,const struct ns_buffer *,const struct ns_buffer *);
 uint32_t lfs_namespace_open(void *,struct ns_out *,const char *,uint32_t,struct ns_context *);
 uint32_t lfs_namespace_directory(void *,struct ns_out *,const char *,uint32_t,struct ns_context *);
 uint32_t lfs_namespace_type(void *,uint32_t *,const char *,struct ns_context *);
+ns_code_open_fn lfs_codefs_original(void);
+void lfs_namespace_register(void *,uint64_t);
+uint32_t lfs_namespace_mount(void *,struct ns_out *,const void *,uint32_t,uint64_t,uint32_t);
 #endif

@@ -46,8 +46,12 @@ static int matching(const char *path,const uint8_t *build){
 }
 static uint32_t parse(struct nso *n,const struct lfs_lazy_file *file){
  if(file->size<8||file->size>SIZE_MAX)return 0xd401;
- uint8_t *data=lfs_arena_allocate(&n->arena,file->size);if(!data)return 0xd401;
- uint32_t result=lfs_source_read((const char *)&file->source,file->offset,data,file->size);if(result)return result;
+ const uint8_t *data;
+ if(file->kind==LAZY_INLINE_PATCH){if(!file->offset)return 0xd401;data=(const uint8_t *)(uintptr_t)file->offset;}
+ else{
+  uint8_t *copy=lfs_arena_allocate(&n->arena,file->size);if(!copy)return 0xd401;
+  uint32_t result=lfs_source_read((const char *)&file->source,file->offset,copy,file->size);if(result)return result;data=copy;
+ }
  unsigned width=lfs_equal(data,"IPS32",5)?4:3;
  if(width==3&&!lfs_equal(data,"PATCH",5))return 0xd401;
  uint64_t at=5;
@@ -106,20 +110,36 @@ static uint32_t initialize(struct nso *n){
  *(uint32_t *)(n->header+12)=n->flags&~UINT32_C(0xbf);
  return 0;
 }
-static uint32_t patch_file(void *object,struct lfs_life *life,const struct ns_file *file,int report){
- struct lfs_lazy_config *config=lfs_lazy_config();if(!config->patch_count||file->size<256)return 0;
+uint64_t lfs_lazy_patch_count(const struct lfs_lazy_game *game){
+ uint64_t count=0;if(game)for(uint64_t i=0;i<game->count;i++)if(game->files[i].kind==LAZY_PATCH||game->files[i].kind==LAZY_INLINE_PATCH)count++;return count;
+}
+static uint32_t probe_nso(void *object,const struct ns_file *file,uint64_t program,const struct lfs_lazy_game *game,uint64_t *matches,int report,uint8_t *identity){
+ *matches=0;struct lfs_lazy_config *config=lfs_lazy_config();if((!config->patch_count&&!lfs_lazy_patch_count(game))||file->size<256)return 0;
  struct nso initial={.file=file,.object=object};uint8_t header[256];uint32_t result=read_raw(&initial,0,header,256);if(result)return result;
  if(!lfs_equal(header,"NSO0",4))return 0;
- uint64_t matches=0;for(uint64_t i=0;i<config->patch_count;i++)if(matching(config->patches[i].name,header+0x40))matches++;
- const struct ns_group *owner=life->plan_owner;
+ if(identity)lfs_copy(identity,header+0x40,32);
+ if(game)for(uint64_t i=0;i<game->count;i++)if((game->files[i].kind==LAZY_PATCH||game->files[i].kind==LAZY_INLINE_PATCH)&&matching(game->files[i].name,header+0x40))(*matches)++;
+ for(uint64_t i=0;i<config->patch_count;i++)if(matching(config->patches[i].name,header+0x40))(*matches)++;
  /* Build ID is recorded even when every supplied patch belongs to another
   * game version. This makes an inactive patch visible in the normal report. */
  char build[65];static const char hex[]="0123456789abcdef";for(unsigned i=0;i<32;i++){build[i*2]=hex[header[0x40+i]>>4];build[i*2+1]=hex[header[0x40+i]&15];}build[64]=0;
- if(report){lfs_lazy_log("NSO file",owner?owner->program_id:0,file->size,0,file->name);lfs_lazy_log("NSO Build ID",owner?owner->program_id:0,matches,0,build);}
- if(!matches){if(report)lfs_lazy_log_flush();return 0;}
+ if(report){lfs_lazy_log("NSO file",program,file->size,0,file->name);lfs_lazy_log("NSO Build ID",program,*matches,0,build);}
+ if(!*matches&&report)lfs_lazy_log_flush();return 0;
+}
+uint32_t lfs_lazy_probe_nso(void *object,const struct ns_file *file,uint64_t program,uint64_t *matches){
+ return probe_nso(object,file,program,lfs_lazy_game(program),matches,1,0);
+}
+static uint32_t patch_file(void *object,struct lfs_life *life,const struct ns_file *file,const struct lfs_lazy_game *game,int report){
+ struct lfs_lazy_config *config=lfs_lazy_config();const struct ns_group *owner=life->plan_owner;
+ uint8_t identity[32];uint64_t matches=0;uint32_t result=probe_nso(object,file,owner?owner->program_id:0,game,&matches,report,identity);if(result||!matches)return result;
  struct lfs_arena *arena=0;struct nso *n=lfs_arena_allocate(&arena,sizeof(*n));if(!n){lfs_arena_free(arena);return 0xd401;}
  n->arena=arena;n->file=file;n->object=object;
- for(uint64_t i=0;i<config->patch_count&&!result;i++)if(matching(config->patches[i].name,header+0x40)){
+ /* Match the prepared JS path's order: title-scoped patches first, then
+  * global patchsets. A later record wins, independent of storage layout. */
+ if(game)for(uint64_t i=0;i<game->count&&!result;i++)if((game->files[i].kind==LAZY_PATCH||game->files[i].kind==LAZY_INLINE_PATCH)&&matching(game->files[i].name,identity)){
+  result=parse(n,&game->files[i]);if(report)lfs_lazy_log("IPS matched",owner?owner->program_id:0,game->files[i].size,result,game->files[i].source.path);
+ }
+ for(uint64_t i=0;i<config->patch_count&&!result;i++)if(matching(config->patches[i].name,identity)){
   result=parse(n,&config->patches[i]);if(report)lfs_lazy_log("IPS matched",owner?owner->program_id:0,config->patches[i].size,result,config->patches[i].source.path);
  }
  if(!result)result=initialize(n);
@@ -127,16 +147,16 @@ static uint32_t patch_file(void *object,struct lfs_life *life,const struct ns_fi
  if(report||result)lfs_lazy_log_flush();return result;
 }
 uint32_t lfs_lazy_patch_file(void *object,struct lfs_life *life,const struct ns_file *file,const struct lfs_lazy_game *game){
- (void)game;return patch_file(object,life,file,1);
+ return patch_file(object,life,file,game,1);
 }
 uint32_t lfs_lazy_directory_size(void *filesystem,const struct ns_file *file,const struct ns_group *group,uint64_t *size){
- *size=file->size;if(file->size<256)return 0;
+ *size=file->size;if(!file->flags||file->size<256)return 0;
  struct ns_context *c=lfs_context()->codefs;char name[0x302];name[0]='/';uint64_t length=lfs_text_length(file->name);if(length>0x300)return 0xd401;lfs_copy(name+1,file->name,length+1);
  void *object=0;struct ns_out out={&object};
  uint32_t result=file->source_path?c->open_file(c->source_fs,&out,((const struct lfs_source *)file->source_path)->path,1):c->open_file(filesystem,&out,name,1);
  if(!result&&!object)result=0xd401;
  if(!result){
-  struct lfs_life temporary={.plan_owner=group};result=patch_file(object,&temporary,file,0);
+  struct lfs_life temporary={.plan_owner=group};result=patch_file(object,&temporary,file,lfs_lazy_game(group->program_id),0);
   if(temporary.stream){if(!result)*size=((const struct nso *)temporary.stream)->size;lfs_lazy_stream_release(temporary.stream);}
   c->release(object);
  }
@@ -203,7 +223,7 @@ uint32_t lfs_lazy_nso_read(struct lfs_life *life,uint64_t *read,int64_t at,const
  (void)option;struct nso *n=life->stream;
  if(at<0||length<0||(uint64_t)length>buffer->capacity||(uint64_t)at>n->size)return 0xd401;
  uint64_t amount=n->size-(uint64_t)at;if(amount>(uint64_t)length)amount=(uint64_t)length;
- while(__atomic_exchange_n(&n->lock,1,__ATOMIC_ACQUIRE))lfs_pause();
+ lfs_mutex_lock(&n->lock);
  uint64_t cursor=(uint64_t)at,end=cursor+amount;uint32_t result=0;
  while(cursor<end&&!result){
   uint8_t *out=(uint8_t *)buffer->data+cursor-(uint64_t)at;
@@ -220,7 +240,7 @@ uint32_t lfs_lazy_nso_read(struct lfs_life *life,uint64_t *read,int64_t at,const
  if(!result)*read=amount;
  if(!result&&amount&&!n->reserved){n->reserved=1;lfs_lazy_log("IPS first read",0,amount,0,n->file->name);lfs_lazy_log_flush();}
  if(result&&!n->error){n->error=result;lfs_lazy_log("IPS read error",0,(uint64_t)at,result,n->file->name);lfs_lazy_log_flush();}
- __atomic_store_n(&n->lock,0,__ATOMIC_RELEASE);return result;
+ lfs_mutex_unlock(&n->lock);return result;
 }
 uint32_t lfs_lazy_nso_size(struct lfs_life *life,uint64_t *size){*size=((const struct nso *)life->stream)->size;return 0;}
 void lfs_lazy_stream_release(void *stream){

@@ -1,5 +1,6 @@
 #include "namespace.h"
 #include "lazy.h"
+#include "trace.h"
 static void add(uint64_t *p,int64_t n){ __atomic_fetch_add(p,n,__ATOMIC_RELAXED); }
 static int equal_name(const char *a,const char *b){
  for(unsigned i=0;i<0x301;i++){if(a[i]!=b[i])return 0;if(!a[i])return 1;}return 0;
@@ -21,8 +22,15 @@ static int read_bytes(struct ns_context *c,void *file,uint64_t offset,void *data
 }
 static const struct ns_group *owner(void *fs,struct ns_context *c){
  if(!c->enabled||fs==c->source_fs)return 0;
+ struct lfs_life *n=lfs_lookup((uint8_t *)fs-8,LFS_CODEFS);return n?n->owner:0;
+}
+/* Only the qualified Loader OpenCodeFileSystem result enters discovery.
+ * Generic FS callbacks must not open main.npdm, enumerate an unrelated
+ * filesystem or retain a negative-cache reference to an account's data. */
+static const struct ns_group *register_owner(void *fs,uint64_t program,struct ns_context *c){
+ if(!c->enabled||fs==c->source_fs)return 0;
  struct lfs_life *n=lfs_lookup((uint8_t *)fs-8,LFS_CODEFS);if(n)return n->owner;
- if(lfs_lazy_config())return lfs_lazy_codefs(fs,c);
+ if(lfs_lazy_config())return lfs_lazy_codefs(fs,c,program);
  uint8_t npdm[128],main[256];uint64_t id=0,size=0;void *file=0;struct ns_out out={&file};
  if(c->open_file(fs,&out,"/main.npdm",1)||!file)return 0;
  int ok=read_bytes(c,file,0,npdm,128);const struct ns_group *g=0;
@@ -37,6 +45,23 @@ static const struct ns_group *owner(void *fs,struct ns_context *c){
  ok=!c->size(file,&size)&&size==g->main_size&&read_bytes(c,file,0,main,256)&&lfs_equal(main,g->main_header,256);
  c->release(file);if(!ok)return 0;
  lfs_track((uint8_t *)fs-8,g,LFS_CODEFS);return g;
+}
+void lfs_namespace_register(void *fs,uint64_t program){
+ struct ns_context *c=lfs_context()->codefs;
+ if(c&&c->magic==0x34465343u&&c->enabled&&fs){
+  uint64_t trace=lfs_trace_begin(LFS_T_CODEFS_PREPARE,(uint8_t *)fs-8,0,program,0);
+  const struct ns_group *g=register_owner(fs,program,c);
+  lfs_trace_end(trace,0,g?g->program_id:0,0,0);
+ }
+}
+uint32_t lfs_namespace_mount(void *root,struct ns_out *out,const void *verification,uint32_t attributes,uint64_t program,uint32_t storage){
+ /* The six arguments and the shared-output indirection are the qualified
+  * native Loader ABI. Verification output and original failures pass through. */
+ uint64_t trace=lfs_trace_begin(LFS_T_CODEFS_MOUNT,root,0,program,((uint64_t)storage<<32)|attributes);
+ uint32_t result=lfs_codefs_original()(root,out,verification,attributes,program,storage);
+ void *object=!result&&out&&out->value?*out->value:0;
+ if(object)lfs_namespace_register((uint8_t *)object+8,program);
+ lfs_trace_end(trace,result,(uintptr_t)object,0,0);return result;
 }
 static uint32_t slice_read(void *object,uint64_t *read,int64_t offset,const struct ns_buffer *buffer,int64_t length,uint32_t option){
  struct lfs_life *n=lfs_lookup(object,LFS_SLICE);if(!n)return 0xd401;
@@ -140,7 +165,7 @@ uint32_t lfs_namespace_directory(void *fs,struct ns_out *out,const char *path,ui
   if(!n){((ns_ref_fn)(*(void ***)object)[1])(object);*out->value=0;result=0xd401;add(&c->errors,1);}
   else{n->mode=mode;if(lfs_lazy_config()){
    n->plan_owner=g;lfs_lazy_owner_retain(g);
-   if(lfs_lazy_config()->patch_count){n->filesystem=(uint8_t *)fs-8;((ns_ref_fn)(*(void ***)n->filesystem)[0])(n->filesystem);}
+   if(lfs_lazy_config()->patch_count||lfs_lazy_patch_count(lfs_lazy_game(g->program_id))){n->filesystem=(uint8_t *)fs-8;((ns_ref_fn)(*(void ***)n->filesystem)[0])(n->filesystem);}
   }add(&c->matched,1);}
  }
  add(&c->active,-1);return result;
@@ -158,6 +183,7 @@ uint64_t lfs_initialize(void){
  c->reserved2=0;
  if(c->log_file)((ns_ref_fn)(*(void ***)c->log_file)[0])(c->log_file);
  struct lfs_lazy_config *a=lfs_lazy_config();
+ if(a&&a->trace&&a->trace->file)((ns_ref_fn)(*(void ***)a->trace->file)[0])(a->trace->file);
  if(a&&c->log_file&&a->set_log_size(c->log_file,a->log_cursor))a->log_failed=1;
  ((ns_ref_fn)(*(void ***)c->source_fs)[0])(c->source_fs);return 0;
 }
